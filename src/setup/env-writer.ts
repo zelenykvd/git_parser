@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const ENV_PATH = path.resolve(import.meta.dirname, "../../.env");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ENV_PATH = path.resolve(__dirname, "../../.env");
 
 export interface EnvValues {
   TELEGRAM_API_ID: string;

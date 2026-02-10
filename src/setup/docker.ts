@@ -1,11 +1,13 @@
 import { execFile, exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 
-const PROJECT_ROOT = path.resolve(import.meta.dirname, "../..");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, "../..");
 
 export async function isDockerAvailable(): Promise<{ ok: boolean; error?: string }> {
   try {
