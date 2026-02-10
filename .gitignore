@@ -1,7 +1,7 @@
 node_modules/
 dist/
 .env
-media/
+/media/
 prisma/*.db
 *.js.map
 admin/node_modules/
