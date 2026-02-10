@@ -21,7 +21,7 @@ model Channel {
 model Post {
   id             Int       @id @default(autoincrement())
   channelId      Int
-  channel        Channel   @relation(fields: [channelId], references: [id])
+  channel        Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
   telegramMsgId  Int
   originalText   String
   translatedText String?
