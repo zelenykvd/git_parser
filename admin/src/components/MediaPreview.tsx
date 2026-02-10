@@ -22,12 +22,12 @@ export default function MediaPreview({ files, onDelete }: Props) {
             <img
               src={mediaUrl(f.id)}
               alt={f.fileName || "photo"}
-              className="w-32 h-32 object-cover rounded border"
+              className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded border"
             />
           ) : f.type === "video" || f.type === "animation" ? (
             <video
               src={mediaUrl(f.id)}
-              className="w-32 h-32 object-cover rounded border"
+              className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded border"
               controls
             />
           ) : (
@@ -35,7 +35,7 @@ export default function MediaPreview({ files, onDelete }: Props) {
               href={mediaUrl(f.id)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center w-32 h-32 bg-gray-100 rounded border text-sm text-gray-600"
+              className="flex items-center justify-center w-24 h-24 sm:w-32 sm:h-32 bg-gray-100 rounded border text-sm text-gray-600"
             >
               {f.fileName || "file"}
             </a>

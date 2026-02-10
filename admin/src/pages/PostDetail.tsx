@@ -133,7 +133,7 @@ export default function PostDetail() {
         &larr; Назад
       </button>
 
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-bold">Пост #{post.id}</h1>
         <StatusBadge status={post.status} />
         <span className="text-sm text-gray-500">@{post.channel?.username}</span>
@@ -238,7 +238,7 @@ export default function PostDetail() {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 mt-6">
+      <div className="flex gap-3 mt-6 flex-wrap">
         {post.status === "PENDING" && (
           <>
             <button

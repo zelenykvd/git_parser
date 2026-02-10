@@ -15,7 +15,7 @@ export default function PostCard({ post }: { post: Post }) {
   return (
     <Link
       to={`/posts/${post.id}`}
-      className="block bg-white rounded-lg shadow hover:shadow-md transition p-4"
+      className="block bg-white rounded-lg shadow hover:shadow-md transition p-3 sm:p-4"
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-gray-500">@{post.channel.username}</span>

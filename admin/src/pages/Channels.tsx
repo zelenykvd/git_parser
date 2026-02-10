@@ -489,7 +489,7 @@ export default function Channels() {
                 Підписок не знайдено
               </p>
             ) : (
-              <div className="max-h-[32rem] overflow-y-auto space-y-2 scrollbar-thin">
+              <div className="max-h-[60vh] overflow-y-auto space-y-2 scrollbar-thin">
                 {filteredDialogs.map((d, i) => {
                   const added = isAlreadyAdded(d);
                   return (

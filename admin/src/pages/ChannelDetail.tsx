@@ -282,7 +282,7 @@ export default function ChannelDetail() {
           ))}
         </div>
 
-        <div className="h-5 w-px bg-gray-300" />
+        <div className="hidden sm:block h-5 w-px bg-gray-300" />
 
         <div className="flex gap-2 flex-wrap">
           {PERIODS.map((p) => (
