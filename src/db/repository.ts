@@ -36,7 +36,7 @@ export async function deleteChannel(id: number) {
   return prisma.channel.delete({ where: { id } });
 }
 
-export async function updateLastCheckedMsgId(channelId: number, msgId: number) {
+export async function updateLastCheckedMsgId(channelId: number, msgId: number | null) {
   return prisma.channel.update({
     where: { id: channelId },
     data: { lastCheckedMsgId: msgId },

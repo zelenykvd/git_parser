@@ -122,14 +122,23 @@ async function initialSync(channel: { id: number; username: string }) {
     }
   }
 
-  // If no messages found, check DB for existing max ID (from manual history fetch)
+  // If no messages found in the sync window, get the latest message ID from the channel
+  // so that incrementalPoll doesn't fetch ALL history (minId: 0 bug)
   if (maxMsgId === 0) {
     const dbMax = await getMaxTelegramMsgId(channel.id);
-    maxMsgId = dbMax ?? 0;
+    if (dbMax) {
+      maxMsgId = dbMax;
+    } else {
+      // No posts in DB either — get the very latest message ID from Telegram
+      // so we only track new messages going forward
+      for await (const msg of client.iterMessages(entity, { limit: 1 })) {
+        maxMsgId = msg.id;
+      }
+    }
   }
 
-  await updateLastCheckedMsgId(channel.id, maxMsgId);
-  console.log(`Initial sync for @${channel.username} done: ${count} posts saved, lastCheckedMsgId=${maxMsgId}`);
+  await updateLastCheckedMsgId(channel.id, maxMsgId || null);
+  console.log(`Initial sync for @${channel.username} done: ${count} posts saved, lastCheckedMsgId=${maxMsgId || "null"}`);
 }
 
 async function incrementalPoll(channel: { id: number; username: string; lastCheckedMsgId: number }) {
