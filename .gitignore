@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+media/
+prisma/*.db
+*.js.map
+admin/node_modules/
+admin/dist/
+.DS_Store
+.claude/

@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Channel {
+  id                Int      @id @default(autoincrement())
+  username          String   @unique
+  title             String?
+  active            Boolean  @default(true)
+  targetChannelId   String?
+  lastCheckedMsgId  Int?
+  posts             Post[]
+  createdAt         DateTime @default(now())
+}
+
+model Post {
+  id             Int       @id @default(autoincrement())
+  channelId      Int
+  channel        Channel   @relation(fields: [channelId], references: [id])
+  telegramMsgId  Int
+  originalText   String
+  translatedText String?
+  entities       Json?
+  mediaFiles     Media[]
+  isHistorical   Boolean   @default(false)
+  status         Status    @default(PENDING)
+  createdAt      DateTime  @default(now())
+  publishedAt    DateTime?
+
+  @@unique([channelId, telegramMsgId])
+}
+
+model Media {
+  id       Int     @id @default(autoincrement())
+  postId   Int
+  post     Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type     String
+  filePath String
+  fileName String?
+  mimeType String?
+}
+
+model Subscription {
+  id                Int      @id @default(autoincrement())
+  telegramId        String   @unique
+  title             String
+  username          String?
+  isChannel         Boolean  @default(false)
+  isGroup           Boolean  @default(false)
+  participantsCount Int?
+  avatarPath        String?
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+}
+
+enum Status {
+  PENDING
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
