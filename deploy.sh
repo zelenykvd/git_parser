@@ -14,6 +14,8 @@ ok()   { echo -e "${GREEN}✓${NC} $1"; }
 warn() { echo -e "${YELLOW}!${NC} $1"; }
 fail() { echo -e "${RED}✗${NC} $1"; exit 1; }
 
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # ——— Docker ———
 if command -v docker &>/dev/null; then
   ok "Docker installed"
@@ -58,6 +60,7 @@ fi
 # ——— npm dependencies ———
 echo ""
 echo "Installing dependencies..."
+cd "$APP_DIR"
 npm install --silent
 ok "Backend dependencies"
 
@@ -65,13 +68,14 @@ if [ -d "admin" ]; then
   cd admin && npm install --silent
   echo "Building admin panel..."
   npm run build
-  cd ..
+  cd "$APP_DIR"
   ok "Admin panel built"
 fi
 
 # ——— Start containers ———
 echo ""
 echo "Starting Docker containers..."
+cd "$APP_DIR"
 docker compose up -d
 ok "PostgreSQL + Nginx running"
 
@@ -93,18 +97,55 @@ done
 
 # ——— Prisma migrations ———
 echo "Running database migrations..."
+cd "$APP_DIR"
 npx prisma migrate deploy 2>&1 | tail -3
 npx prisma generate --no-hints 2>/dev/null
 ok "Migrations complete"
+
+# ——— systemd service ———
+echo ""
+echo "Setting up systemd service..."
+
+NODE_PATH=$(which node)
+NPX_PATH=$(which npx)
+TSX_PATH="$APP_DIR/node_modules/.bin/tsx"
+
+cat > /etc/systemd/system/telegram-parser.service <<EOF
+[Unit]
+Description=Telegram Parser & Translator
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=${APP_DIR}
+ExecStart=${TSX_PATH} src/launcher.ts
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PATH=${APP_DIR}/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable telegram-parser
+systemctl restart telegram-parser
+ok "systemd service installed and started"
 
 # ——— Summary ———
 echo ""
 echo "========================================="
 echo -e "${GREEN}Deploy complete!${NC}"
 echo ""
-echo "Start the app:"
-echo "  npm run dev"
+echo "App is running as a systemd service."
+echo ""
+echo "  Status:   systemctl status telegram-parser"
+echo "  Logs:     journalctl -u telegram-parser -f"
+echo "  Restart:  systemctl restart telegram-parser"
+echo "  Stop:     systemctl stop telegram-parser"
 echo ""
 IP=$(hostname -I | awk '{print $1}')
-echo "Then open: http://${IP}"
+echo "Open: http://${IP}"
 echo "========================================="
