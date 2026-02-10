@@ -34,8 +34,8 @@ export async function startSetupServer(onComplete: () => void): Promise<void> {
   const port = Number(process.env.PORT || 3001);
 
   const server: Server = await new Promise((resolve) => {
-    const s = app.listen(port, () => {
-      console.log(`\n  Setup wizard running at http://localhost:${port}\n`);
+    const s = app.listen(port, "0.0.0.0", () => {
+      console.log(`\n  Setup wizard running at http://0.0.0.0:${port}\n`);
       resolve(s);
     });
   });

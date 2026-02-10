@@ -11,8 +11,8 @@ app.use(router);
 
 export function startServer() {
   return new Promise<void>((resolve) => {
-    app.listen(config.server.port, () => {
-      console.log(`API server running on http://localhost:${config.server.port}`);
+    app.listen(config.server.port, "0.0.0.0", () => {
+      console.log(`API server running on http://0.0.0.0:${config.server.port}`);
       resolve();
     });
   });
