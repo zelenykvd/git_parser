@@ -2,6 +2,9 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import * as path from "path";
 import * as fs from "fs";
+import crypto from "crypto";
+import { exec } from "child_process";
+import { fileURLToPath } from "url";
 import {
   getPosts,
   getPost,
@@ -44,6 +47,29 @@ export const router = Router();
 
 // ——— Health (public) ———
 router.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+
+// ——— GitHub Webhook (public) ———
+const __routesDirname = path.dirname(fileURLToPath(import.meta.url));
+const UPDATE_SCRIPT = path.resolve(__routesDirname, "../../update.sh");
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
+
+router.post("/api/webhook/github", (req: Request, res: Response) => {
+  if (WEBHOOK_SECRET) {
+    const sig = req.headers["x-hub-signature-256"] as string || "";
+    const body = JSON.stringify(req.body);
+    const expected = "sha256=" + crypto.createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex");
+    if (sig !== expected) {
+      return res.status(403).json({ error: "Invalid signature" });
+    }
+  }
+
+  res.json({ ok: true, message: "Update started" });
+
+  exec(`bash ${UPDATE_SCRIPT}`, (err, stdout, stderr) => {
+    if (err) console.error("Update failed:", stderr);
+    else console.log("Update output:", stdout);
+  });
+});
 
 // ——— Auth ———
 router.post("/api/auth/login", loginHandler);
