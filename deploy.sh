@@ -62,8 +62,11 @@ npm install --silent
 ok "Backend dependencies"
 
 if [ -d "admin" ]; then
-  cd admin && npm install --silent && cd ..
-  ok "Admin panel dependencies"
+  cd admin && npm install --silent
+  echo "Building admin panel..."
+  npm run build
+  cd ..
+  ok "Admin panel built"
 fi
 
 # ——— Start containers ———
