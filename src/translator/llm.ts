@@ -1,9 +1,14 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 
-const client = new OpenAI({
+const primaryClient = new OpenAI({
   apiKey: config.llm.apiKey,
   baseURL: config.llm.baseUrl,
+});
+
+const fallbackClient = new OpenAI({
+  apiKey: config.llm.apiKey,
+  baseURL: config.llm.fallbackBaseUrl,
 });
 
 // ——— Agent 1: Translator ———
@@ -38,18 +43,29 @@ const TRANSLATE_PROMPT = `Ти — професійний перекладач. 
 - Поверни ТІЛЬКИ перекладений текст без пояснень`;
 
 async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
-  const response = await client.chat.completions.create({
-    model: config.llm.model,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    temperature,
-  });
+  for (const client of [primaryClient, fallbackClient]) {
+    try {
+      const response = await client.chat.completions.create({
+        model: config.llm.model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature,
+      });
 
-  const result = response.choices[0]?.message?.content?.trim();
-  if (!result) throw new Error("Empty LLM response");
-  return result;
+      const result = response.choices[0]?.message?.content?.trim();
+      if (!result) throw new Error("Empty LLM response");
+      if (client === fallbackClient) {
+        console.log(`[LLM] Primary URL failed, using fallback: ${config.llm.fallbackBaseUrl}`);
+      }
+      return result;
+    } catch (err) {
+      if (client === fallbackClient) throw err;
+      console.warn(`[LLM] Primary URL failed (${config.llm.baseUrl}), trying fallback...`, (err as Error).message);
+    }
+  }
+  throw new Error("All LLM endpoints failed");
 }
 
 /**
