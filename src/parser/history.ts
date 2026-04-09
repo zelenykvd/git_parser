@@ -12,13 +12,9 @@ export interface FetchProgress {
   skipped: number;
   done: boolean;
   error?: string;
+  phase?: "collecting" | "saving";
 }
 
-/**
- * Fetches full message history for a channel and saves posts + media.
- * Calls `onProgress` after each batch so the caller can stream updates.
- * Does NOT auto-translate — the user triggers translation manually.
- */
 export interface AbortSignal {
   aborted: boolean;
 }
@@ -42,10 +38,10 @@ export async function fetchChannelHistory(
   const since = options?.since;
   const signal = options?.signal;
 
-  const progress: FetchProgress = { fetched: 0, saved: 0, skipped: 0, done: false };
+  const progress: FetchProgress = { fetched: 0, saved: 0, skipped: 0, done: false, phase: "collecting" };
   const report = () => onProgress?.({ ...progress });
 
-  // Collect all messages first, then group them for album support
+  // Phase 1: collect messages
   const allMessages: Api.Message[] = [];
 
   for await (const message of client.iterMessages(entity, { limit: undefined })) {
@@ -58,22 +54,30 @@ export async function fetchChannelHistory(
 
     if (since && message.date) {
       const msgDate = new Date(message.date * 1000);
-      if (msgDate < since) {
-        console.log(`Reached messages older than ${since.toISOString()}, stopping`);
-        break;
-      }
+      if (msgDate < since) break;
     }
 
     allMessages.push(message as Api.Message);
 
-    if (progress.fetched % 50 === 0) report();
+    if (progress.fetched % 20 === 0) report();
   }
 
-  // Reverse to oldest-first, then group
+  if (signal?.aborted) {
+    progress.done = true;
+    report();
+    return progress;
+  }
+
+  // Phase 2: group and save
+  progress.phase = "saving";
+  report();
+
   allMessages.reverse();
   const groups = groupMessages(allMessages);
 
   for (const group of groups) {
+    if (signal?.aborted) break;
+
     const { primary, all } = group;
     const text = primary.message || "";
     if (!text.trim()) {
@@ -95,8 +99,8 @@ export async function fetchChannelHistory(
 
       progress.saved++;
 
-      // Download media from ALL messages in the group
       for (const msg of all) {
+        if (signal?.aborted) break;
         await downloadMessageMedia(client, msg, post.id, channelId);
       }
     } catch (err) {
@@ -104,7 +108,7 @@ export async function fetchChannelHistory(
       progress.skipped++;
     }
 
-    if (progress.saved % 20 === 0) report();
+    report();
   }
 
   progress.done = true;

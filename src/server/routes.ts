@@ -45,7 +45,7 @@ interface FetchTask {
   channelId: number;
   channelLabel: string;
   signal: { aborted: boolean };
-  progress: { fetched: number; saved: number; skipped: number; done: boolean; error?: string };
+  progress: { fetched: number; saved: number; skipped: number; done: boolean; error?: string; phase?: string };
   startedAt: number;
 }
 const fetchTasks = new Map<number, FetchTask>();
