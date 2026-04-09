@@ -98,54 +98,24 @@ export function translatePost(id: number, force = false) {
   return request(`/posts/${id}/translate${query}`, { method: "POST" });
 }
 
-// Channel history (SSE)
-export function fetchChannelHistory(
-  channelId: number,
-  onProgress: (p: { fetched: number; saved: number; skipped: number; done: boolean; error?: string }) => void,
-  options?: { since?: string }
-): { cancel: () => void } {
-  const ctrl = new AbortController();
-  const token = getToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  fetch(`${BASE}/channels/${channelId}/fetch-history`, {
+// Channel history — background tasks
+export function startFetchHistory(channelId: number, options?: { since?: string }) {
+  return request(`/channels/${channelId}/fetch-history`, {
     method: "POST",
-    headers,
     body: JSON.stringify({ since: options?.since }),
-    signal: ctrl.signal,
-  }).then(async (res) => {
-    if (res.status === 401) {
-      handle401(res);
-      onProgress({ fetched: 0, saved: 0, skipped: 0, done: true, error: "Authentication required" });
-      return;
-    }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      onProgress({ fetched: 0, saved: 0, skipped: 0, done: true, error: err.error });
-      return;
-    }
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop()!;
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try { onProgress(JSON.parse(line.slice(6))); } catch {}
-        }
-      }
-    }
-  }).catch((err) => {
-    if (err.name !== "AbortError") {
-      onProgress({ fetched: 0, saved: 0, skipped: 0, done: true, error: err.message });
-    }
   });
-  return { cancel: () => ctrl.abort() };
+}
+
+export function fetchTaskStatus(channelId: number) {
+  return request(`/channels/${channelId}/fetch-status`);
+}
+
+export function cancelFetchHistory(channelId: number) {
+  return request(`/channels/${channelId}/fetch-cancel`, { method: "POST" });
+}
+
+export function fetchAllTasks(): Promise<{ channelId: number; channelLabel: string; fetched: number; saved: number; done: boolean; error?: string }[]> {
+  return request(`/fetch-tasks`);
 }
 
 // Telegram Dialogs
@@ -166,10 +136,10 @@ export function fetchChannels() {
   return request("/channels");
 }
 
-export function addChannel(data: { username?: string; telegramId?: string; title?: string }) {
+export function addChannel(username: string, title?: string) {
   return request("/channels", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ username, title }),
   });
 }
 

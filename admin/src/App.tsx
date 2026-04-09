@@ -7,6 +7,7 @@ import ChannelDetail from "./pages/ChannelDetail";
 import Login from "./pages/Login";
 import { isLoggedIn, clearToken } from "./auth";
 import Icon from "./components/Icon";
+import TaskBar from "./components/TaskBar";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
@@ -82,8 +83,9 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={
           <AuthGuard>
-            <div className="min-h-screen bg-neutral-50">
+            <div className="min-h-screen bg-neutral-50 pb-14">
               <NavBar />
+              <TaskBar />
               <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
                 <Routes>
                   <Route path="/" element={<PostList />} />

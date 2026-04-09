@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchChannels, fetchPosts, translatePost, fetchChannelHistory } from "../api";
+import { fetchChannels, fetchPosts, translatePost, startFetchHistory, fetchTaskStatus, cancelFetchHistory } from "../api";
 import PostCard from "../components/PostCard";
 import Avatar from "../components/Avatar";
 import Icon from "../components/Icon";
@@ -35,7 +35,7 @@ export default function ChannelDetail() {
   const [loading, setLoading] = useState(true);
   const [translatingId, setTranslatingId] = useState<number | null>(null);
   const [historyProgress, setHistoryProgress] = useState<HistoryProgress | null>(null);
-  const cancelRef = useRef<(() => void) | null>(null);
+  const [fetchError, setFetchError] = useState("");
 
   useEffect(() => { fetchChannels().then((chs: Channel[]) => setChannel(chs.find((c) => c.id === channelId) || null)).catch(console.error); }, [channelId]);
 
@@ -47,17 +47,49 @@ export default function ChannelDetail() {
   }
   useEffect(() => { loadPosts(); }, [channelId, status, period, page]);
 
+  // Poll task status
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const s = await fetchTaskStatus(channelId);
+        if (!active) return;
+        if (s.active) {
+          setHistoryProgress({ fetched: s.fetched, saved: s.saved, skipped: s.skipped, done: false });
+          setTimeout(poll, 2000);
+        } else if (s.fetched > 0) {
+          setHistoryProgress({ fetched: s.fetched, saved: s.saved, skipped: s.skipped, done: true, error: s.error });
+          loadPosts();
+        } else {
+          setHistoryProgress(null);
+        }
+      } catch {}
+    }
+    poll();
+    return () => { active = false; };
+  }, [channelId]);
+
   async function handleTranslate(postId: number) {
     setTranslatingId(postId);
     try { const u = await translatePost(postId); setPosts((p) => p.map((x) => x.id === postId ? { ...x, translatedText: u.translatedText } : x)); }
     catch {} finally { setTranslatingId(null); }
   }
 
-  function handleFetchHistory() {
-    if (historyProgress && !historyProgress.done) return;
-    setHistoryProgress({ fetched: 0, saved: 0, skipped: 0, done: false });
-    const { cancel } = fetchChannelHistory(channelId, (p) => { setHistoryProgress(p); if (p.done) loadPosts(); }, { since: periodToSince(period) });
-    cancelRef.current = cancel;
+  async function handleFetchHistory() {
+    setFetchError("");
+    try {
+      await startFetchHistory(channelId, { since: periodToSince(period) });
+      setHistoryProgress({ fetched: 0, saved: 0, skipped: 0, done: false });
+      // Polling will pick up progress
+    } catch (err: any) {
+      setFetchError(err.message);
+    }
+  }
+
+  async function handleCancelHistory() {
+    await cancelFetchHistory(channelId).catch(() => {});
+    setHistoryProgress((p) => p ? { ...p, done: true } : null);
+    loadPosts();
   }
 
   const fetching = historyProgress && !historyProgress.done;
@@ -92,7 +124,7 @@ export default function ChannelDetail() {
                     <Icon name="progress_activity" size={14} className="animate-spin" />
                     {historyProgress!.fetched}/{historyProgress!.saved}
                   </span>
-                  <button onClick={() => { cancelRef.current?.(); setHistoryProgress((p) => p ? { ...p, done: true } : null); loadPosts(); }}
+                  <button onClick={handleCancelHistory}
                     className="flex items-center gap-1 px-3 py-2 text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
                     <Icon name="stop" size={14} /> Стоп
                   </button>
@@ -112,9 +144,9 @@ export default function ChannelDetail() {
             <Icon name="check_circle" size={14} /> {historyProgress.saved} збережено, {historyProgress.skipped} пропущено
           </div>
         )}
-        {historyProgress?.error && (
+        {(historyProgress?.error || fetchError) && (
           <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2 flex items-center gap-1">
-            <Icon name="error" size={14} /> {historyProgress.error}
+            <Icon name="error" size={14} /> {historyProgress?.error || fetchError}
           </div>
         )}
       </div>

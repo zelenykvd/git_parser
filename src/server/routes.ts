@@ -40,8 +40,15 @@ if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 const upload = multer({ dest: path.join(MEDIA_DIR, "tmp") });
 
-// Track active history fetches per channel to prevent duplicates
-const activeFetches = new Map<number, { signal: { aborted: boolean }; startedAt: number }>();
+// Background fetch tasks
+interface FetchTask {
+  channelId: number;
+  channelLabel: string;
+  signal: { aborted: boolean };
+  progress: { fetched: number; saved: number; skipped: number; done: boolean; error?: string };
+  startedAt: number;
+}
+const fetchTasks = new Map<number, FetchTask>();
 
 export const router = Router();
 
@@ -238,6 +245,7 @@ router.patch("/api/channels/:id", async (req: Request, res: Response) => {
   }
 });
 
+// Start background fetch task
 router.post("/api/channels/:id/fetch-history", async (req: Request, res: Response) => {
   try {
     const channelId = Number(req.params.id);
@@ -246,56 +254,81 @@ router.post("/api/channels/:id/fetch-history", async (req: Request, res: Respons
     );
     if (!channel) return res.status(404).json({ error: "Channel not found" });
 
-    // Prevent parallel fetches for the same channel (with 5 min timeout safety)
-    const existing = activeFetches.get(channelId);
-    if (existing) {
+    // Check for existing task
+    const existing = fetchTasks.get(channelId);
+    if (existing && !existing.progress.done) {
       const age = Date.now() - existing.startedAt;
-      if (age < 5 * 60 * 1000) {
-        return res.status(409).json({ error: "Fetch already in progress for this channel" });
+      if (age < 10 * 60 * 1000) {
+        return res.status(409).json({ error: "Fetch already in progress" });
       }
-      // Stale fetch — abort and clean up
       existing.signal.aborted = true;
-      activeFetches.delete(channelId);
     }
 
     const since = req.body?.since ? new Date(req.body.since) : undefined;
     const signal = { aborted: false };
-    activeFetches.set(channelId, { signal, startedAt: Date.now() });
+    const label = channel.username || channel.telegramId || String(channelId);
+    const task: FetchTask = {
+      channelId,
+      channelLabel: channel.title || label,
+      signal,
+      progress: { fetched: 0, saved: 0, skipped: 0, done: false },
+      startedAt: Date.now(),
+    };
+    fetchTasks.set(channelId, task);
 
-    // SSE stream for progress
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    // Run in background — don't await
+    fetchChannelHistory(channel.id, label, (p) => {
+      task.progress = p;
+    }, { since, signal })
+      .then(() => {
+        task.progress.done = true;
+        console.log(`[Task] Fetch done for ${label}: ${task.progress.saved} saved`);
+      })
+      .catch((err) => {
+        task.progress.done = true;
+        task.progress.error = err.message;
+        console.error(`[Task] Fetch failed for ${label}:`, err.message);
+      });
 
-    // Abort on client disconnect
-    req.on("close", () => {
-      signal.aborted = true;
-      activeFetches.delete(channelId);
-      console.log(`Client disconnected, aborting fetch for channel ${channel.username}`);
-    });
-
-    await fetchChannelHistory(channel.id, channel.username || channel.telegramId!, (progress) => {
-      if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify(progress)}\n\n`);
-      }
-    }, { since, signal });
-
-    activeFetches.delete(channelId);
-    if (!res.writableEnded) res.end();
+    res.json({ ok: true, channelId });
   } catch (err: any) {
-    const channelId = Number(req.params.id);
-    activeFetches.delete(channelId);
-    // If headers already sent, send error as SSE event
-    if (res.headersSent) {
-      if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ done: true, error: err.message })}\n\n`);
-        res.end();
-      }
-    } else {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(500).json({ error: err.message });
   }
+});
+
+// Get task status
+router.get("/api/channels/:id/fetch-status", async (req: Request, res: Response) => {
+  const channelId = Number(req.params.id);
+  const task = fetchTasks.get(channelId);
+  if (!task) return res.json({ active: false });
+  res.json({
+    active: !task.progress.done,
+    channelLabel: task.channelLabel,
+    ...task.progress,
+  });
+});
+
+// Cancel fetch task
+router.post("/api/channels/:id/fetch-cancel", async (req: Request, res: Response) => {
+  const channelId = Number(req.params.id);
+  const task = fetchTasks.get(channelId);
+  if (task) {
+    task.signal.aborted = true;
+    task.progress.done = true;
+  }
+  res.json({ ok: true });
+});
+
+// Get all active tasks
+router.get("/api/fetch-tasks", async (_req: Request, res: Response) => {
+  const tasks = [...fetchTasks.values()]
+    .filter((t) => !t.progress.done)
+    .map((t) => ({
+      channelId: t.channelId,
+      channelLabel: t.channelLabel,
+      ...t.progress,
+    }));
+  res.json(tasks);
 });
 
 router.delete("/api/channels/:id", async (req: Request, res: Response) => {
