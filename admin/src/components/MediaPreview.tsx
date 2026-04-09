@@ -35,13 +35,19 @@ export default function MediaPreview({ files, onDelete }: Props) {
             ) : f.type === "video" || f.type === "animation" ? (
               <div
                 onClick={() => setGalleryIndex(i)}
-                className="relative w-full h-full bg-neutral-900 border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center"
+                className="relative w-full h-full bg-neutral-900 border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity"
               >
-                <div className="flex flex-col items-center gap-1 text-white/60">
-                  <div className="w-8 h-8 bg-white/20 flex items-center justify-center">
+                <video
+                  src={mediaUrl(f.id) + "#t=0.5"}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-8 h-8 bg-black/50 flex items-center justify-center backdrop-blur-sm">
                     <Icon name="play_arrow" size={18} className="text-white ml-px" />
                   </div>
-                  <span className="text-[10px]">Video</span>
                 </div>
               </div>
             ) : (

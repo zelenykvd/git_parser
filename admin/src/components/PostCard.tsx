@@ -30,9 +30,18 @@ export default function PostCard({ post }: { post: any }) {
               loading="lazy"
             />
           ) : firstMedia.type === "video" || firstMedia.type === "animation" ? (
-            <div className="w-full aspect-video bg-neutral-900 flex items-center justify-center">
-              <div className="w-12 h-12 bg-white/20 flex items-center justify-center">
-                <Icon name="play_arrow" size={28} className="text-white ml-0.5" />
+            <div className="relative w-full aspect-video bg-neutral-900">
+              <video
+                src={mediaUrl(firstMedia.id) + "#t=0.5"}
+                className="w-full h-full object-cover"
+                muted
+                playsInline
+                preload="metadata"
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-10 h-10 bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                  <Icon name="play_arrow" size={24} className="text-white ml-0.5" />
+                </div>
               </div>
             </div>
           ) : (
