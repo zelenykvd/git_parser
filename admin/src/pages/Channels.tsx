@@ -25,7 +25,8 @@ import {
 
 interface Channel {
   id: number;
-  username: string;
+  username: string | null;
+  telegramId: string | null;
   title: string | null;
   active: boolean;
   targetChannelId: string | null;
@@ -129,12 +130,12 @@ function ChannelCard({
         {/* Header with avatar */}
         <div className="flex items-start gap-3">
           <Link to={`/channels/${ch.id}`} className="flex items-start gap-3 min-w-0 flex-1">
-            <Avatar id={ch.username} title={ch.title || ch.username} hasAvatar={dialogs.some((d) => d.username === ch.username && d.hasAvatar)} />
+            <Avatar id={ch.username || ch.telegramId || String(ch.id)} title={ch.title || ch.username || "Приватний канал"} hasAvatar={dialogs.some((d) => (ch.username && d.username === ch.username) || (ch.telegramId && d.id === ch.telegramId) ? d.hasAvatar : false)} />
             <div className="min-w-0 flex-1">
               <span className="font-semibold text-sm truncate block">
-                {ch.title || `@${ch.username}`}
+                {ch.title || (ch.username ? `@${ch.username}` : "Приватний канал")}
               </span>
-              <span className="text-xs text-gray-400">@{ch.username}</span>
+              <span className="text-xs text-gray-400">{ch.username ? `@${ch.username}` : ch.telegramId || ""}</span>
             </div>
           </Link>
           <button
@@ -317,8 +318,11 @@ export default function Channels() {
         (d) => selected.has(d.id) && !isAlreadyAdded(d)
       );
       for (const d of toAdd) {
-        const username = d.username || d.id;
-        await apiAddChannel(username, d.title || undefined);
+        await apiAddChannel({
+          username: d.username || undefined,
+          telegramId: d.username ? undefined : d.id,
+          title: d.title || undefined,
+        });
       }
       setSelected(new Set());
       load();
@@ -342,8 +346,8 @@ export default function Channels() {
   function isAlreadyAdded(dialog: TelegramDialog): boolean {
     return channels.some(
       (ch) =>
-        ch.username === dialog.username ||
-        ch.username === dialog.id
+        (ch.username && dialog.username && ch.username === dialog.username) ||
+        (ch.telegramId && ch.telegramId === dialog.id)
     );
   }
 

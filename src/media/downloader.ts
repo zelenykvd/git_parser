@@ -14,10 +14,6 @@ export async function downloadMessageMedia(
 ): Promise<void> {
   if (!message.media) return;
 
-  // Skip if media already exists for this post (dedup guard)
-  const existing = await getMediaByPostId(postId);
-  if (existing.length > 0) return;
-
   const dir = path.join(MEDIA_DIR, String(channelId), String(postId));
   fs.mkdirSync(dir, { recursive: true });
 

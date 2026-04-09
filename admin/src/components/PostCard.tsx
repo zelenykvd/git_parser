@@ -18,7 +18,7 @@ export default function PostCard({ post }: { post: Post }) {
       className="block bg-white rounded-lg shadow hover:shadow-md transition p-3 sm:p-4"
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-500">@{post.channel.username}</span>
+        <span className="text-sm text-gray-500">{post.channel.username ? `@${post.channel.username}` : post.channel.title || "Приватний канал"}</span>
         <StatusBadge status={post.status} />
       </div>
       <p className="text-sm text-gray-800 line-clamp-3 whitespace-pre-wrap">

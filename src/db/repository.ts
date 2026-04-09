@@ -12,12 +12,46 @@ export async function getActiveChannels() {
   return prisma.channel.findMany({ where: { active: true } });
 }
 
-export async function addChannel(username: string, title?: string, targetChannelId?: string) {
-  const clean = username.replace(/^@/, "");
-  return prisma.channel.upsert({
-    where: { username: clean },
-    update: { active: true, title, ...(targetChannelId !== undefined ? { targetChannelId } : {}) },
-    create: { username: clean, title, targetChannelId },
+export async function addChannel(data: {
+  username?: string;
+  telegramId?: string;
+  title?: string;
+  targetChannelId?: string;
+}) {
+  const username = data.username?.replace(/^@/, "") || null;
+  const telegramId = data.telegramId || null;
+
+  if (!username && !telegramId) {
+    throw new Error("Either username or telegramId is required");
+  }
+
+  // Find existing channel by telegramId or username
+  const existing = telegramId
+    ? await prisma.channel.findUnique({ where: { telegramId } })
+    : username
+    ? await prisma.channel.findUnique({ where: { username } })
+    : null;
+
+  if (existing) {
+    return prisma.channel.update({
+      where: { id: existing.id },
+      data: {
+        active: true,
+        ...(data.title ? { title: data.title } : {}),
+        ...(username ? { username } : {}),
+        ...(telegramId ? { telegramId } : {}),
+        ...(data.targetChannelId !== undefined ? { targetChannelId: data.targetChannelId } : {}),
+      },
+    });
+  }
+
+  return prisma.channel.create({
+    data: {
+      username,
+      telegramId,
+      title: data.title,
+      targetChannelId: data.targetChannelId,
+    },
   });
 }
 

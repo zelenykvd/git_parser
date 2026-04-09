@@ -166,10 +166,10 @@ export function fetchChannels() {
   return request("/channels");
 }
 
-export function addChannel(username: string, title?: string) {
+export function addChannel(data: { username?: string; telegramId?: string; title?: string }) {
   return request("/channels", {
     method: "POST",
-    body: JSON.stringify({ username, title }),
+    body: JSON.stringify(data),
   });
 }
 

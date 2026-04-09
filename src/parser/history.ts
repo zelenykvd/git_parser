@@ -1,8 +1,10 @@
 import { Api } from "telegram";
+import bigInt from "big-integer";
 import { getTelegramClient } from "./client.js";
 import { parseGramJSEntities } from "./formatter.js";
 import { createPost } from "../db/repository.js";
 import { downloadMessageMedia } from "../media/downloader.js";
+import { groupMessages } from "./grouper.js";
 
 export interface FetchProgress {
   fetched: number;
@@ -23,15 +25,18 @@ export interface AbortSignal {
 
 export async function fetchChannelHistory(
   channelId: number,
-  username: string,
+  identifier: string,
   onProgress?: (p: FetchProgress) => void,
   options?: { since?: Date; signal?: AbortSignal }
 ): Promise<FetchProgress> {
   const client = await getTelegramClient();
 
-  const entity = await client.getEntity(username);
+  const entityId: string | Api.PeerChannel = /^-?\d+$/.test(identifier)
+    ? new Api.PeerChannel({ channelId: bigInt(identifier.replace(/^-100/, "")) })
+    : identifier;
+  const entity = await client.getEntity(entityId);
   if (!(entity instanceof Api.Channel)) {
-    throw new Error(`@${username} is not a channel`);
+    throw new Error(`${identifier} is not a channel`);
   }
 
   const since = options?.since;
@@ -40,17 +45,17 @@ export async function fetchChannelHistory(
   const progress: FetchProgress = { fetched: 0, saved: 0, skipped: 0, done: false };
   const report = () => onProgress?.({ ...progress });
 
-  // iterMessages yields messages from newest to oldest
+  // Collect all messages first, then group them for album support
+  const allMessages: Api.Message[] = [];
+
   for await (const message of client.iterMessages(entity, { limit: undefined })) {
-    // Check for abort
     if (signal?.aborted) {
-      console.log(`Fetch aborted for channel ${username}`);
+      console.log(`Fetch aborted for channel ${identifier}`);
       break;
     }
 
     progress.fetched++;
 
-    // Messages go from newest to oldest — stop when we pass the since boundary
     if (since && message.date) {
       const msgDate = new Date(message.date * 1000);
       if (msgDate < since) {
@@ -59,45 +64,47 @@ export async function fetchChannelHistory(
       }
     }
 
-    // Use message.message (clean text), NOT message.text which inserts ** markers
-    const text = (message as Api.Message).message || "";
+    allMessages.push(message as Api.Message);
+
+    if (progress.fetched % 50 === 0) report();
+  }
+
+  // Reverse to oldest-first, then group
+  allMessages.reverse();
+  const groups = groupMessages(allMessages);
+
+  for (const group of groups) {
+    const { primary, all } = group;
+    const text = primary.message || "";
     if (!text.trim()) {
-      progress.skipped++;
-      if (progress.fetched % 50 === 0) report();
+      progress.skipped += all.length;
       continue;
     }
 
-    const entities = parseGramJSEntities(
-      (message as Api.Message).entities
-    );
+    const entities = parseGramJSEntities(primary.entities);
 
     try {
       const post = await createPost({
         channelId,
-        telegramMsgId: message.id,
+        telegramMsgId: primary.id,
         originalText: text,
         entities: entities as any,
-        createdAt: message.date ? new Date(message.date * 1000) : undefined,
+        createdAt: primary.date ? new Date(primary.date * 1000) : undefined,
         isHistorical: true,
       });
 
-      // createPost uses upsert — if post already existed, id is returned but
-      // nothing is updated. We still count it as saved (idempotent).
       progress.saved++;
 
-      // Download media (sequential — gramjs limitation)
-      await downloadMessageMedia(
-        client,
-        message as Api.Message,
-        post.id,
-        channelId
-      );
+      // Download media from ALL messages in the group
+      for (const msg of all) {
+        await downloadMessageMedia(client, msg, post.id, channelId);
+      }
     } catch (err) {
-      console.error(`Failed to save message ${message.id}:`, err);
+      console.error(`Failed to save message ${primary.id}:`, err);
       progress.skipped++;
     }
 
-    if (progress.fetched % 20 === 0) report();
+    if (progress.saved % 20 === 0) report();
   }
 
   progress.done = true;

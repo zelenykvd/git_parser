@@ -193,13 +193,13 @@ export default function ChannelDetail() {
         {channel ? (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <Avatar id={channel.username} title={channel.title || channel.username} />
+              <Avatar id={channel.username || channel.telegramId || String(channel.id)} title={channel.title || channel.username || "Приватний канал"} />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">
-                  {channel.title || `@${channel.username}`}
+                  {channel.title || (channel.username ? `@${channel.username}` : "Приватний канал")}
                 </h1>
                 <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-sm text-gray-500">@{channel.username}</span>
+                  <span className="text-sm text-gray-500">{channel.username ? `@${channel.username}` : channel.telegramId || ""}</span>
                   <span className="inline-flex items-center gap-1">
                     {channel.active ? (
                       <CircleDot className="w-3.5 h-3.5 text-green-500" />

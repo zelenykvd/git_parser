@@ -210,9 +210,9 @@ router.get("/api/channels", async (_req: Request, res: Response) => {
 
 router.post("/api/channels", async (req: Request, res: Response) => {
   try {
-    const { username, title } = req.body;
-    if (!username) return res.status(400).json({ error: "username is required" });
-    const channel = await addChannel(username, title);
+    const { username, telegramId, title } = req.body;
+    if (!username && !telegramId) return res.status(400).json({ error: "username or telegramId is required" });
+    const channel = await addChannel({ username, telegramId, title });
 
     // Trigger initial sync in background (non-blocking)
     if (channel.lastCheckedMsgId === null) {
@@ -268,7 +268,7 @@ router.post("/api/channels/:id/fetch-history", async (req: Request, res: Respons
       console.log(`Client disconnected, aborting fetch for channel ${channel.username}`);
     });
 
-    await fetchChannelHistory(channel.id, channel.username, (progress) => {
+    await fetchChannelHistory(channel.id, channel.username || channel.telegramId!, (progress) => {
       if (!res.writableEnded) {
         res.write(`data: ${JSON.stringify(progress)}\n\n`);
       }

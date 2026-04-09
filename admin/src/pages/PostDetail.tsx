@@ -136,7 +136,7 @@ export default function PostDetail() {
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-bold">Пост #{post.id}</h1>
         <StatusBadge status={post.status} />
-        <span className="text-sm text-gray-500">@{post.channel?.username}</span>
+        <span className="text-sm text-gray-500">{post.channel?.username ? `@${post.channel.username}` : post.channel?.title || ""}</span>
       </div>
 
       {error && (
