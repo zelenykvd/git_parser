@@ -41,7 +41,7 @@ if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
 const upload = multer({ dest: path.join(MEDIA_DIR, "tmp") });
 
 // Track active history fetches per channel to prevent duplicates
-const activeFetches = new Map<number, { signal: { aborted: boolean } }>();
+const activeFetches = new Map<number, { signal: { aborted: boolean }; startedAt: number }>();
 
 export const router = Router();
 
@@ -246,14 +246,21 @@ router.post("/api/channels/:id/fetch-history", async (req: Request, res: Respons
     );
     if (!channel) return res.status(404).json({ error: "Channel not found" });
 
-    // Prevent parallel fetches for the same channel
-    if (activeFetches.has(channelId)) {
-      return res.status(409).json({ error: "Fetch already in progress for this channel" });
+    // Prevent parallel fetches for the same channel (with 5 min timeout safety)
+    const existing = activeFetches.get(channelId);
+    if (existing) {
+      const age = Date.now() - existing.startedAt;
+      if (age < 5 * 60 * 1000) {
+        return res.status(409).json({ error: "Fetch already in progress for this channel" });
+      }
+      // Stale fetch — abort and clean up
+      existing.signal.aborted = true;
+      activeFetches.delete(channelId);
     }
 
     const since = req.body?.since ? new Date(req.body.since) : undefined;
     const signal = { aborted: false };
-    activeFetches.set(channelId, { signal });
+    activeFetches.set(channelId, { signal, startedAt: Date.now() });
 
     // SSE stream for progress
     res.setHeader("Content-Type", "text/event-stream");
