@@ -29,24 +29,19 @@ export default function MediaPreview({ files, onDelete }: Props) {
                 src={mediaUrl(f.id)}
                 alt={f.fileName || "photo"}
                 onClick={() => setGalleryIndex(i)}
-                className="w-full h-full object-cover border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity"
+                className="w-full h-full object-cover border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity bg-neutral-100"
                 loading="lazy"
               />
             ) : f.type === "video" || f.type === "animation" ? (
               <div
                 onClick={() => setGalleryIndex(i)}
-                className="relative w-full h-full bg-neutral-900 border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity"
+                className="relative w-full h-full bg-neutral-900 border border-neutral-200 cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center"
               >
-                <video
-                  src={mediaUrl(f.id)}
-                  className="w-full h-full object-cover"
-                  muted
-                  preload="metadata"
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-8 bg-white/80 flex items-center justify-center">
-                    <Icon name="play_arrow" size={18} className="text-neutral-900 ml-px" />
+                <div className="flex flex-col items-center gap-1 text-white/60">
+                  <div className="w-8 h-8 bg-white/20 flex items-center justify-center">
+                    <Icon name="play_arrow" size={18} className="text-white ml-px" />
                   </div>
+                  <span className="text-[10px]">Video</span>
                 </div>
               </div>
             ) : (

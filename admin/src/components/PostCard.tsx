@@ -21,35 +21,39 @@ export default function PostCard({ post }: { post: any }) {
     >
       {/* Media banner */}
       {firstMedia && (
-        <div className="relative bg-neutral-100">
+        <div className="relative">
           {firstMedia.type === "photo" ? (
             <img
               src={mediaUrl(firstMedia.id)}
               alt=""
-              className="w-full aspect-video object-cover"
+              className="w-full aspect-video object-cover bg-neutral-100"
               loading="lazy"
             />
           ) : firstMedia.type === "video" || firstMedia.type === "animation" ? (
-            <div className="relative w-full aspect-video bg-neutral-900">
-              <video
-                src={mediaUrl(firstMedia.id)}
-                className="w-full h-full object-cover"
-                muted
-                preload="metadata"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 bg-white/90 flex items-center justify-center">
-                  <Icon name="play_arrow" size={24} className="text-neutral-900 ml-0.5" />
-                </div>
+            <div className="w-full aspect-video bg-neutral-900 flex items-center justify-center">
+              <div className="w-12 h-12 bg-white/20 flex items-center justify-center">
+                <Icon name="play_arrow" size={28} className="text-white ml-0.5" />
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="w-full py-6 bg-neutral-100 flex items-center justify-center">
+              <Icon name="description" size={28} className="text-neutral-300" />
+            </div>
+          )}
 
           {/* +N badge */}
           {extraCount > 0 && (
             <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-medium px-1.5 py-0.5 flex items-center gap-0.5">
               <Icon name="photo_library" size={12} />
               +{extraCount}
+            </div>
+          )}
+
+          {/* Type badge for video */}
+          {(firstMedia.type === "video" || firstMedia.type === "animation") && (
+            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-medium px-1.5 py-0.5 flex items-center gap-0.5">
+              <Icon name="videocam" size={12} />
+              Video
             </div>
           )}
         </div>
