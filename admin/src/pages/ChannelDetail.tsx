@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchChannels, fetchPosts, translatePost, fetchChannelHistory, telegramAvatarUrl } from "../api";
+import { fetchChannels, fetchPosts, translatePost, fetchChannelHistory } from "../api";
 import PostCard from "../components/PostCard";
-import { ArrowLeft, CircleDot, CircleOff, Loader2, Download } from "lucide-react";
+import Avatar from "../components/Avatar";
+import Icon from "../components/Icon";
 
 interface Channel {
   id: number;
-  username: string;
+  username: string | null;
+  telegramId: string | null;
   title: string | null;
   active: boolean;
   targetChannelId: string | null;
@@ -21,85 +23,17 @@ interface HistoryProgress {
   error?: string;
 }
 
-const AVATAR_COLORS = [
-  "bg-red-500",
-  "bg-orange-500",
-  "bg-amber-500",
-  "bg-green-500",
-  "bg-teal-500",
-  "bg-blue-500",
-  "bg-indigo-500",
-  "bg-purple-500",
-  "bg-pink-500",
-];
-
-function hashColor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function Avatar({ id, title }: { id: string; title: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const letter = (title || "?")[0].toUpperCase();
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(telegramAvatarUrl(id))
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.blob();
-      })
-      .then((blob) => {
-        if (!cancelled) setSrc(URL.createObjectURL(blob));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [id]);
-
-  if (!src) {
-    return (
-      <div
-        className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${hashColor(id)}`}
-      >
-        {letter}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={title}
-      className="w-10 h-10 rounded-full object-cover shrink-0"
-    />
-  );
-}
-
 const STATUSES = ["", "PENDING", "APPROVED", "REJECTED", "PUBLISHED"];
-const STATUS_LABELS: Record<string, string> = {
-  "": "Всі",
-  PENDING: "Очікують",
-  APPROVED: "Схвалені",
-  REJECTED: "Відхилені",
-  PUBLISHED: "Опубліковані",
-};
-
+const STATUS_LABELS: Record<string, string> = { "": "Всі", PENDING: "Очікують", APPROVED: "Схвалені", REJECTED: "Відхилені", PUBLISHED: "Опубліковані" };
 const PERIODS = ["week", "month", "all"] as const;
 type Period = (typeof PERIODS)[number];
-const PERIOD_LABELS: Record<Period, string> = {
-  week: "Тиждень",
-  month: "Місяць",
-  all: "Весь час",
-};
+const PERIOD_LABELS: Record<Period, string> = { week: "Тиждень", month: "Місяць", all: "Весь час" };
 
 function periodToSince(period: Period): string | undefined {
   if (period === "all") return undefined;
   const d = new Date();
   if (period === "week") d.setDate(d.getDate() - 7);
-  else if (period === "month") d.setMonth(d.getMonth() - 1);
+  else d.setMonth(d.getMonth() - 1);
   return d.toISOString();
 }
 
@@ -115,102 +49,60 @@ export default function ChannelDetail() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [translatingId, setTranslatingId] = useState<number | null>(null);
-
   const [historyProgress, setHistoryProgress] = useState<HistoryProgress | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    fetchChannels()
-      .then((channels: Channel[]) => {
-        const found = channels.find((ch) => ch.id === channelId);
-        setChannel(found || null);
-      })
-      .catch(console.error);
+    fetchChannels().then((chs: Channel[]) => setChannel(chs.find((c) => c.id === channelId) || null)).catch(console.error);
   }, [channelId]);
 
   function loadPosts() {
     setLoading(true);
     fetchPosts({ channelId, status: status || undefined, since: periodToSince(period), page })
-      .then((data) => {
-        setPosts(data.posts);
-        setTotalPages(data.totalPages);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then((data) => { setPosts(data.posts); setTotalPages(data.totalPages); })
+      .catch(console.error).finally(() => setLoading(false));
   }
 
-  useEffect(() => {
-    loadPosts();
-  }, [channelId, status, period, page]);
+  useEffect(() => { loadPosts(); }, [channelId, status, period, page]);
 
   async function handleTranslate(postId: number) {
     setTranslatingId(postId);
-    try {
-      const updated = await translatePost(postId);
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, translatedText: updated.translatedText } : p))
-      );
-    } catch (err: any) {
-      console.error("Translation failed:", err);
-    } finally {
-      setTranslatingId(null);
-    }
+    try { const u = await translatePost(postId); setPosts((p) => p.map((x) => x.id === postId ? { ...x, translatedText: u.translatedText } : x)); }
+    catch {} finally { setTranslatingId(null); }
   }
 
   function handleFetchHistory() {
     if (historyProgress && !historyProgress.done) return;
     setHistoryProgress({ fetched: 0, saved: 0, skipped: 0, done: false });
-
     const { cancel } = fetchChannelHistory(channelId, (p) => {
-      setHistoryProgress(p);
-      if (p.done) {
-        loadPosts();
-      }
+      setHistoryProgress(p); if (p.done) loadPosts();
     }, { since: periodToSince(period) });
     cancelRef.current = cancel;
   }
 
-  function handleCancelHistory() {
-    cancelRef.current?.();
-    setHistoryProgress((prev) => prev ? { ...prev, done: true } : null);
-    loadPosts();
-  }
-
   const fetching = historyProgress && !historyProgress.done;
+  const chLabel = channel?.title || (channel?.username ? `@${channel.username}` : "Приватний канал");
 
   return (
-    <div className="space-y-6">
-      {/* Channel Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-        <Link
-          to="/channels"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Канали
+    <div className="space-y-6 animate-fadeIn">
+      {/* Header */}
+      <div className="bg-white border border-neutral-200 p-5">
+        <Link to="/channels" className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 transition-colors mb-4">
+          <Icon name="arrow_back" size={14} /> Канали
         </Link>
 
         {channel ? (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <Avatar id={channel.username || channel.telegramId || String(channel.id)} title={channel.title || channel.username || "Приватний канал"} />
+              <Avatar id={channel.username || channel.telegramId || String(channel.id)} title={chLabel} size="lg" />
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  {channel.title || (channel.username ? `@${channel.username}` : "Приватний канал")}
-                </h1>
+                <h1 className="text-lg font-semibold">{chLabel}</h1>
                 <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-sm text-gray-500">{channel.username ? `@${channel.username}` : channel.telegramId || ""}</span>
-                  <span className="inline-flex items-center gap-1">
-                    {channel.active ? (
-                      <CircleDot className="w-3.5 h-3.5 text-green-500" />
-                    ) : (
-                      <CircleOff className="w-3.5 h-3.5 text-gray-400" />
-                    )}
-                    <span
-                      className={`text-xs font-medium ${
-                        channel.active ? "text-green-600" : "text-gray-400"
-                      }`}
-                    >
+                  <span className="text-xs text-neutral-400">{channel.username ? `@${channel.username}` : channel.telegramId || ""}</span>
+                  <span className="flex items-center gap-1">
+                    <Icon name={channel.active ? "radio_button_checked" : "radio_button_unchecked"} size={12}
+                      className={channel.active ? "text-emerald-500" : "text-neutral-300"} />
+                    <span className={`text-xs ${channel.active ? "text-emerald-600" : "text-neutral-400"}`}>
                       {channel.active ? "Активний" : "Неактивний"}
                     </span>
                   </span>
@@ -218,142 +110,108 @@ export default function ChannelDetail() {
               </div>
             </div>
 
-            {/* Fetch history button */}
             <div className="flex items-center gap-3">
               {fetching ? (
                 <>
-                  <div className="text-sm text-gray-600">
-                    <Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />
-                    {historyProgress!.fetched} повідомлень / {historyProgress!.saved} збережено
-                  </div>
-                  <button
-                    onClick={handleCancelHistory}
-                    className="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
-                  >
+                  <span className="text-xs text-neutral-500 flex items-center gap-1">
+                    <Icon name="progress_activity" size={14} className="animate-spin" />
+                    {historyProgress!.fetched} / {historyProgress!.saved} збережено
+                  </span>
+                  <button onClick={() => { cancelRef.current?.(); setHistoryProgress((p) => p ? { ...p, done: true } : null); loadPosts(); }}
+                    className="px-3 py-1.5 text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
                     Зупинити
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={handleFetchHistory}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  Завантажити історію
+                <button onClick={handleFetchHistory}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-neutral-900 text-white hover:bg-neutral-800 transition-colors">
+                  <Icon name="download" size={14} /> Завантажити історію
                 </button>
               )}
             </div>
           </div>
         ) : (
-          <div className="h-10 w-48 rounded bg-gray-100 animate-pulse" />
+          <div className="h-10 w-48 bg-shimmer animate-shimmer" />
         )}
 
-        {/* History result message */}
         {historyProgress?.done && !historyProgress.error && (
-          <div className="mt-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-            Готово: {historyProgress.saved} постів збережено, {historyProgress.skipped} пропущено
+          <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2">
+            Готово: {historyProgress.saved} збережено, {historyProgress.skipped} пропущено
           </div>
         )}
         {historyProgress?.error && (
-          <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            Помилка: {historyProgress.error}
+          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2">
+            {historyProgress.error}
           </div>
         )}
       </div>
 
       {/* Filters */}
       <div className="flex gap-4 flex-wrap items-center">
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-1 flex-wrap">
           {STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => {
-                setStatus(s);
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                status === s
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-700 border hover:bg-gray-50"
-              }`}
-            >
+            <button key={s} onClick={() => { setStatus(s); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                status === s ? "bg-neutral-900 text-white" : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
+              }`}>
               {STATUS_LABELS[s]}
             </button>
           ))}
         </div>
-
-        <div className="hidden sm:block h-5 w-px bg-gray-300" />
-
-        <div className="flex gap-2 flex-wrap">
+        <div className="hidden sm:block h-4 w-px bg-neutral-200" />
+        <div className="flex gap-1 flex-wrap">
           {PERIODS.map((p) => (
-            <button
-              key={p}
-              onClick={() => {
-                setPeriod(p);
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                period === p
-                  ? "bg-gray-800 text-white"
-                  : "bg-white text-gray-700 border hover:bg-gray-50"
-              }`}
-            >
+            <button key={p} onClick={() => { setPeriod(p); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                period === p ? "bg-neutral-700 text-white" : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
+              }`}>
               {PERIOD_LABELS[p]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Posts grid */}
+      {/* Posts */}
       {loading ? (
-        <p className="text-gray-500">Завантаження...</p>
+        <div className="flex items-center gap-2 text-neutral-400 text-sm py-12 justify-center">
+          <Icon name="progress_activity" size={18} className="animate-spin" />
+        </div>
       ) : posts.length === 0 ? (
-        <p className="text-gray-500">Постів не знайдено</p>
+        <div className="text-center py-16">
+          <Icon name="inbox" size={40} className="text-neutral-200 mx-auto" />
+          <p className="text-neutral-400 text-sm mt-2">Постів не знайдено</p>
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-px bg-neutral-200 border border-neutral-200 md:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
-            <div key={post.id} className="flex flex-col">
+            <div key={post.id} className="bg-white">
               <PostCard post={post} />
               {!post.translatedText && (
-                <button
-                  onClick={() => handleTranslate(post.id)}
-                  disabled={translatingId === post.id}
-                  className="mt-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2"
-                >
-                  {translatingId === post.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Перекладаю...
-                    </>
-                  ) : (
-                    "Перекласти"
-                  )}
-                </button>
+                <div className="px-4 pb-3">
+                  <button onClick={() => handleTranslate(post.id)} disabled={translatingId === post.id}
+                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 disabled:opacity-50 transition-colors">
+                    {translatingId === post.id
+                      ? <><Icon name="progress_activity" size={12} className="animate-spin" /> Перекладаю...</>
+                      : <><Icon name="translate" size={12} /> Перекласти</>
+                    }
+                  </button>
+                </div>
               )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="px-3 py-1 rounded border disabled:opacity-40"
-          >
-            Назад
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            <Icon name="chevron_left" size={16} /> Назад
           </button>
-          <span className="text-sm text-gray-600">
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 rounded border disabled:opacity-40"
-          >
-            Далі
+          <span className="text-xs text-neutral-400 tabular-nums">{page} / {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            Далі <Icon name="chevron_right" size={16} />
           </button>
         </div>
       )}

@@ -6,6 +6,7 @@ import Channels from "./pages/Channels";
 import ChannelDetail from "./pages/ChannelDetail";
 import Login from "./pages/Login";
 import { isLoggedIn, clearToken } from "./auth";
+import Icon from "./components/Icon";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
@@ -16,77 +17,73 @@ function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Close mobile menu on navigation
   const handleNavClick = () => setMenuOpen(false);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `text-sm font-medium ${isActive ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-600 hover:text-gray-900"} pb-0.5`;
+    `flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+      isActive
+        ? "text-neutral-900 bg-neutral-100"
+        : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
+    }`;
 
   const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `block px-3 py-2 rounded-md text-sm font-medium ${isActive ? "text-blue-600 bg-blue-50" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"}`;
+    `flex items-center gap-2 px-4 py-3 text-sm font-medium border-b border-neutral-100 transition-colors ${
+      isActive ? "text-neutral-900 bg-neutral-50" : "text-neutral-500"
+    }`;
 
   return (
-    <nav className="bg-white shadow relative">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex h-14 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <span className="font-bold text-lg">TG Parser</span>
-            {/* Desktop nav links */}
-            <div className="hidden md:flex items-center gap-6">
+    <nav className="bg-white border-b border-neutral-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex h-12 items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Icon name="telegram" size={22} className="text-neutral-400" />
+            <span className="font-semibold text-sm tracking-tight">TG Parser</span>
+
+            <div className="hidden md:flex items-center ml-6 gap-0.5">
               <NavLink to="/" className={linkClass} end>
+                <Icon name="article" size={18} />
                 Пости
               </NavLink>
               <NavLink to="/channels" className={linkClass}>
+                <Icon name="rss_feed" size={18} />
                 Канали
               </NavLink>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Desktop logout */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                clearToken();
-                navigate("/login", { replace: true });
-              }}
-              className="hidden md:block text-sm text-gray-500 hover:text-gray-700"
+              onClick={() => { clearToken(); navigate("/login", { replace: true }); }}
+              className="hidden md:flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-600 transition-colors"
             >
-              Вийти
+              <Icon name="logout" size={18} />
             </button>
-            {/* Mobile burger button */}
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="md:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-              aria-label="Меню"
+              className="md:hidden p-1.5 text-neutral-500 hover:text-neutral-900 transition-colors"
+              aria-label="Menu"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                {menuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
+              <Icon name={menuOpen ? "close" : "menu"} size={22} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile dropdown menu */}
       {menuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1">
+        <div className="md:hidden border-t border-neutral-200 bg-white animate-fadeIn">
           <NavLink to="/" className={mobileLinkClass} end onClick={handleNavClick}>
+            <Icon name="article" size={20} />
             Пости
           </NavLink>
           <NavLink to="/channels" className={mobileLinkClass} onClick={handleNavClick}>
+            <Icon name="rss_feed" size={20} />
             Канали
           </NavLink>
           <button
-            onClick={() => {
-              clearToken();
-              navigate("/login", { replace: true });
-            }}
-            className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            onClick={() => { clearToken(); navigate("/login", { replace: true }); }}
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm font-medium text-neutral-400 hover:text-neutral-600"
           >
+            <Icon name="logout" size={20} />
             Вийти
           </button>
         </div>
@@ -106,8 +103,7 @@ export default function App() {
             <AuthGuard>
               <div className="min-h-screen">
                 <NavBar />
-
-                <main className="max-w-7xl mx-auto px-4 py-6">
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
                   <Routes>
                     <Route path="/" element={<PostList />} />
                     <Route path="/posts/:id" element={<PostDetail />} />
