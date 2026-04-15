@@ -114,7 +114,7 @@ export function cancelFetchHistory(channelId: number) {
   return request(`/channels/${channelId}/fetch-cancel`, { method: "POST" });
 }
 
-export function fetchAllTasks(): Promise<{ channelId: number; channelLabel: string; fetched: number; saved: number; skipped: number; done: boolean; error?: string; phase?: string }[]> {
+export function fetchAllTasks(): Promise<{ channelId: number; channelLabel: string; fetched: number; saved: number; skipped: number; done: boolean; error?: string; phase?: "collecting" | "saving" }[]> {
   return request(`/fetch-tasks`);
 }
 
