@@ -1,3 +1,5 @@
+import * as path from "path";
+import * as fs from "fs";
 import { config } from "../config.js";
 import { llmCall } from "../translator/llm.js";
 import {
@@ -5,6 +7,8 @@ import {
   getPublishedPostsWithoutVaibeCod,
 } from "../db/repository.js";
 import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
+
+const MEDIA_DIR = path.resolve("media");
 
 // ——— Ukrainian transliteration table ———
 
@@ -206,28 +210,64 @@ interface MediaFile {
   mimeType?: string | null;
 }
 
-function mediaPublicUrl(mediaId: number): string {
-  const base = config.vaibeCod.publicUrl.replace(/\/$/, "");
-  return `${base}/api/public/media/${mediaId}`;
+/**
+ * Upload a file to VaibeCod and return the uploaded path (e.g. "/uploads/1713200000-abc.jpg")
+ */
+async function uploadToVaibeCod(filePath: string, fileName: string): Promise<string> {
+  const fileBuffer = fs.readFileSync(filePath);
+  const blob = new Blob([fileBuffer]);
+
+  const form = new FormData();
+  form.append("file", blob, fileName);
+
+  const res = await fetch(`${config.vaibeCod.apiUrl}/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.vaibeCod.apiKey}`,
+    },
+    body: form,
+  });
+
+  if (!res.ok) {
+    throw new Error(`VaibeCod upload failed: ${res.status} ${await res.text()}`);
+  }
+
+  const data = await res.json() as any;
+  return data.url || data.path || data.filePath;
 }
 
-function buildMediaHtml(mediaFiles: MediaFile[]): string {
-  if (mediaFiles.length === 0) return "";
-  const parts: string[] = [];
+/**
+ * Upload all media files to VaibeCod, return array of { type, uploadedUrl }
+ */
+async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string; url: string; fileName: string }[]> {
+  const results: { type: string; url: string; fileName: string }[] = [];
   for (const m of mediaFiles) {
-    const url = mediaPublicUrl(m.id);
+    const localPath = path.join(MEDIA_DIR, m.filePath);
+    if (!fs.existsSync(localPath)) {
+      console.warn(`[VaibeCod] Media file not found: ${localPath}, skipping`);
+      continue;
+    }
+    try {
+      const uploadedUrl = await uploadToVaibeCod(localPath, m.fileName || path.basename(m.filePath));
+      results.push({ type: m.type, url: uploadedUrl, fileName: m.fileName || path.basename(m.filePath) });
+    } catch (err) {
+      console.warn(`[VaibeCod] Failed to upload media ${m.id}:`, (err as Error).message);
+    }
+  }
+  return results;
+}
+
+function buildMediaHtml(uploadedMedia: { type: string; url: string; fileName: string }[]): string {
+  if (uploadedMedia.length === 0) return "";
+  const parts: string[] = [];
+  for (const m of uploadedMedia) {
     if (m.type === "photo") {
-      parts.push(`<img src="${url}" alt="${m.fileName || "image"}" style="max-width:100%;height:auto;" />`);
+      parts.push(`<img src="${m.url}" alt="${m.fileName}" style="max-width:100%;height:auto;" />`);
     } else if (m.type === "video" || m.type === "animation") {
-      parts.push(`<video src="${url}" controls style="max-width:100%;height:auto;"></video>`);
+      parts.push(`<video src="${m.url}" controls style="max-width:100%;height:auto;"></video>`);
     }
   }
   return parts.length > 0 ? `<div>${parts.join("")}</div>` : "";
-}
-
-function getCoverImage(mediaFiles: MediaFile[]): string | undefined {
-  const photo = mediaFiles.find((m) => m.type === "photo");
-  return photo ? mediaPublicUrl(photo.id) : undefined;
 }
 
 // ——— Main publish flow ———
@@ -241,8 +281,15 @@ export async function publishPostToVaibeCod(
 
   const publishedAt = post.publishedAt?.toISOString() || new Date().toISOString();
   const media = post.mediaFiles || [];
-  const mediaHtml = buildMediaHtml(media);
-  const coverImage = getCoverImage(media);
+
+  // Upload media files to VaibeCod
+  let uploadedMedia: { type: string; url: string; fileName: string }[] = [];
+  if (media.length > 0) {
+    console.log(`[VaibeCod] Uploading ${media.length} media files for post #${post.id}...`);
+    uploadedMedia = await uploadMediaFiles(media);
+  }
+  const mediaHtml = buildMediaHtml(uploadedMedia);
+  const coverImage = uploadedMedia.find((m) => m.type === "photo")?.url;
 
   // 1. Generate SEO meta for UK
   const seoUk = await generateSeoMeta(htmlText, "uk");
