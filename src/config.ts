@@ -32,6 +32,10 @@ export const config = {
     intervalMs: Number(process.env.POLLER_INTERVAL_MS || "60000"),
     initialSyncDays: Number(process.env.POLLER_INITIAL_SYNC_DAYS || "30"),
   },
+  vaibeCod: {
+    apiUrl: process.env.VAIBECOD_API_URL || "https://www.vaibecod.com/api/v1",
+    apiKey: process.env.VAIBECOD_API_KEY || "",
+  },
   server: {
     port: Number(process.env.PORT || 3001),
   },

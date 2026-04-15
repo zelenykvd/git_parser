@@ -42,7 +42,7 @@ const TRANSLATE_PROMPT = `Ти — професійний перекладач. 
 - Зберігай структуру абзаців оригіналу
 - Поверни ТІЛЬКИ перекладений текст без пояснень`;
 
-async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
+export async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
   for (const client of [primaryClient, fallbackClient]) {
     try {
       const response = await client.chat.completions.create({

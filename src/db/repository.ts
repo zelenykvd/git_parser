@@ -178,6 +178,31 @@ export async function updatePostTranslatedText(postId: number, text: string) {
   });
 }
 
+// ——— VaibeCod ———
+
+export async function updatePostVaibeCod(
+  postId: number,
+  vaibeCodId: string,
+  vaibeCodUrl: string,
+  vaibeCodIdEn: string,
+  vaibeCodUrlEn: string
+) {
+  return prisma.post.update({
+    where: { id: postId },
+    data: { vaibeCodId, vaibeCodUrl, vaibeCodIdEn, vaibeCodUrlEn },
+  });
+}
+
+export async function getPublishedPostsWithoutVaibeCod(limit = 50, offset = 0) {
+  return prisma.post.findMany({
+    where: { status: "PUBLISHED", vaibeCodUrl: null },
+    include: { mediaFiles: true, channel: true },
+    orderBy: { publishedAt: "asc" },
+    skip: offset,
+    take: limit,
+  });
+}
+
 // ——— Media ———
 
 export async function createMedia(data: {

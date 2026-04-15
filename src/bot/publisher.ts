@@ -1,8 +1,10 @@
 import * as path from "path";
+import { Api } from "telegram";
 import { config } from "../config.js";
 import { getPost, updatePostStatus } from "../db/repository.js";
 import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getTelegramClient } from "../parser/client.js";
+import { publishPostToVaibeCod } from "./vaibecod.js";
 
 const MEDIA_DIR = path.resolve("media");
 
@@ -32,6 +34,25 @@ function isBrokenHtml(text: string): boolean {
   if (/<\/[a-z]+>\S+<[a-z]/.test(text)) return true;
 
   return false;
+}
+
+/**
+ * Build a ReplyInlineMarkup with a URL button for VaibeCod link.
+ */
+function buildVaibeCodButton(vaibeCodUrl: string): Api.ReplyInlineMarkup {
+  const fullUrl = `https://www.vaibecod.com${vaibeCodUrl}?utm_source=telegram&utm_medium=post&utm_campaign=channel`;
+  return new Api.ReplyInlineMarkup({
+    rows: [
+      new Api.KeyboardButtonRow({
+        buttons: [
+          new Api.KeyboardButtonUrl({
+            text: "Читати на сайті",
+            url: fullUrl,
+          }),
+        ],
+      }),
+    ],
+  });
 }
 
 export async function publishPost(postId: number): Promise<void> {
@@ -66,13 +87,36 @@ export async function publishPost(postId: number): Promise<void> {
     );
   }
 
+  // Publish to VaibeCod (uk + en versions with SEO)
+  let vaibeCodUrl: string | null = null;
+  try {
+    vaibeCodUrl = await publishPostToVaibeCod(
+      { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl },
+      htmlText
+    );
+  } catch (err) {
+    console.error(`[VaibeCod] Failed for post #${postId}, publishing to Telegram without button:`, (err as Error).message);
+  }
+
+  // Build reply markup if VaibeCod URL is available
+  const replyMarkup = vaibeCodUrl ? buildVaibeCodButton(vaibeCodUrl) : undefined;
+
   const mediaFiles = post.mediaFiles || [];
 
   if (mediaFiles.length === 0) {
-    await client.sendMessage(channelId, { message: htmlText, parseMode });
+    // Text-only message
+    if (replyMarkup) {
+      await client.sendMessage(channelId, {
+        message: htmlText,
+        parseMode,
+        buttons: replyMarkup,
+      } as any);
+    } else {
+      await client.sendMessage(channelId, { message: htmlText, parseMode });
+    }
   } else {
     // Try sending media with caption; if too long — fallback to media + separate text
-    const sendMedia = async (caption?: string, capParseMode?: "html") => {
+    const sendMedia = async (caption?: string, capParseMode?: "html", markup?: Api.ReplyInlineMarkup) => {
       if (mediaFiles.length === 1) {
         const media = mediaFiles[0];
         const filePath = path.join(MEDIA_DIR, media.filePath);
@@ -81,24 +125,34 @@ export async function publishPost(postId: number): Promise<void> {
           caption,
           parseMode: capParseMode,
           forceDocument: media.type === "document",
-        });
+          ...(markup ? { buttons: markup } : {}),
+        } as any);
       } else {
         const files = mediaFiles.map((m) => path.join(MEDIA_DIR, m.filePath));
         await client.sendFile(channelId, {
           file: files,
           caption,
           parseMode: capParseMode,
-        });
+          ...(markup ? { buttons: markup } : {}),
+        } as any);
       }
     };
 
     try {
-      await sendMedia(htmlText, parseMode);
+      await sendMedia(htmlText, parseMode, replyMarkup);
     } catch (err: any) {
       if (err.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
         // Caption too long — send media without caption, then text separately
         await sendMedia();
-        await client.sendMessage(channelId, { message: htmlText, parseMode });
+        if (replyMarkup) {
+          await client.sendMessage(channelId, {
+            message: htmlText,
+            parseMode,
+            buttons: replyMarkup,
+          } as any);
+        } else {
+          await client.sendMessage(channelId, { message: htmlText, parseMode });
+        }
       } else {
         throw err;
       }
@@ -106,5 +160,5 @@ export async function publishPost(postId: number): Promise<void> {
   }
 
   await updatePostStatus(postId, "PUBLISHED");
-  console.log(`Post #${postId} published to channel ${channelId}`);
+  console.log(`Post #${postId} published to channel ${channelId}${vaibeCodUrl ? ` + VaibeCod` : ""}`);
 }

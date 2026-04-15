@@ -3,6 +3,7 @@ import { startServer } from "./server/app.js";
 import { startListener } from "./parser/listener.js";
 import { startPoller } from "./parser/poller.js";
 import { prisma } from "./db/repository.js";
+import { syncPublishedToVaibeCod } from "./bot/vaibecod.js";
 
 export async function main() {
   console.log("Starting Telegram Parser & Translator...\n");
@@ -29,6 +30,13 @@ export async function main() {
       "Telegram credentials not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env"
     );
     console.log("API server is running — you can configure channels via the admin panel.");
+  }
+
+  // Auto-sync published posts to VaibeCod
+  if (config.vaibeCod.apiKey) {
+    syncPublishedToVaibeCod().catch((err) =>
+      console.error("[VaibeCod] Auto-sync failed:", err.message)
+    );
   }
 }
 

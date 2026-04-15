@@ -485,6 +485,20 @@ router.get("/api/telegram/avatar/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ——— VaibeCod Sync ———
+
+router.post("/api/vaibecod/sync", async (_req: Request, res: Response) => {
+  try {
+    const { syncPublishedToVaibeCod } = await import("../bot/vaibecod.js");
+    res.json({ ok: true, message: "Sync started in background" });
+    syncPublishedToVaibeCod().catch((err) =>
+      console.error("[VaibeCod] Manual sync failed:", err.message)
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ——— Media ———
 
 router.get("/api/media/:id", async (req: Request, res: Response) => {

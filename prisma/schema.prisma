@@ -32,6 +32,10 @@ model Post {
   status         Status    @default(PENDING)
   createdAt      DateTime  @default(now())
   publishedAt    DateTime?
+  vaibeCodId     String?
+  vaibeCodUrl    String?
+  vaibeCodIdEn   String?
+  vaibeCodUrlEn  String?
 
   @@unique([channelId, telegramMsgId])
 }

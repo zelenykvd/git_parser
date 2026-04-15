@@ -88,6 +88,19 @@ export default function PostDetail() {
         <h1 className="text-base sm:text-lg font-semibold">Пост #{post.id}</h1>
         <StatusBadge status={post.status} />
         <span className="text-xs text-neutral-400">{post.channel?.username ? `@${post.channel.username}` : post.channel?.title || ""}</span>
+        {post.vaibeCodUrl && (
+          <span className="flex items-center gap-1 text-xs">
+            <a href={`https://www.vaibecod.com${post.vaibeCodUrl}`} target="_blank" rel="noopener noreferrer"
+              className="text-blue-600 hover:underline">UK ↗</a>
+            {post.vaibeCodUrlEn && (
+              <>
+                <span className="text-neutral-300">|</span>
+                <a href={`https://www.vaibecod.com${post.vaibeCodUrlEn}`} target="_blank" rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline">EN ↗</a>
+              </>
+            )}
+          </span>
+        )}
       </div>
 
       {error && (
