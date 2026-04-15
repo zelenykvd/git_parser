@@ -213,32 +213,38 @@ interface MediaFile {
 /**
  * Upload a file to VaibeCod and return the uploaded path (e.g. "/uploads/1713200000-abc.jpg")
  */
+function getMimeType(fileName: string, mimeType?: string | null): string {
+  if (mimeType && mimeType !== "application/octet-stream") return mimeType;
+  const ext = path.extname(fileName).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+    ".mp4": "video/mp4", ".webm": "video/webm", ".ogg": "video/ogg",
+    ".mov": "video/mp4",
+  };
+  return mimeMap[ext] || "application/octet-stream";
+}
+
 async function uploadToVaibeCod(filePath: string, fileName: string, mimeType?: string | null): Promise<string> {
   const fileBuffer = fs.readFileSync(filePath);
+  const resolvedMime = getMimeType(fileName, mimeType);
 
-  // Determine MIME type from file extension if not provided
-  if (!mimeType) {
-    const ext = path.extname(fileName).toLowerCase();
-    const mimeMap: Record<string, string> = {
-      ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-      ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
-      ".mp4": "video/mp4", ".webm": "video/webm", ".ogg": "video/ogg",
-      ".mov": "video/mp4",
-    };
-    mimeType = mimeMap[ext] || "application/octet-stream";
-  }
+  // Build multipart/form-data manually to ensure correct Content-Type
+  const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
+  const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: ${resolvedMime}\r\n\r\n`;
+  const footer = `\r\n--${boundary}--\r\n`;
 
-  const blob = new Blob([fileBuffer], { type: mimeType });
-
-  const form = new FormData();
-  form.append("file", blob, fileName);
+  const headerBuf = Buffer.from(header);
+  const footerBuf = Buffer.from(footer);
+  const body = Buffer.concat([headerBuf, fileBuffer, footerBuf]);
 
   const res = await fetch(`${config.vaibeCod.apiUrl}/upload`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.vaibeCod.apiKey}`,
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
     },
-    body: form,
+    body,
   });
 
   if (!res.ok) {
