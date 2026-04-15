@@ -78,6 +78,21 @@ router.post("/api/webhook/github", (req: Request, res: Response) => {
   });
 });
 
+// ——— Public Media (no auth, for VaibeCod embeds) ———
+router.get("/api/public/media/:id", async (req: Request, res: Response) => {
+  try {
+    const media = await getMedia(Number(req.params.id));
+    if (!media) return res.status(404).json({ error: "Media not found" });
+    const filePath = path.join(MEDIA_DIR, media.filePath);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found" });
+    if (media.mimeType) res.set("Content-Type", media.mimeType);
+    res.set("Cache-Control", "public, max-age=31536000");
+    res.sendFile(filePath);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ——— Auth ———
 router.post("/api/auth/login", loginHandler);
 router.use("/api", requireAuth);

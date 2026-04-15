@@ -91,7 +91,7 @@ export async function publishPost(postId: number): Promise<void> {
   let vaibeCodUrl: string | null = null;
   try {
     vaibeCodUrl = await publishPostToVaibeCod(
-      { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl },
+      { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl, mediaFiles: post.mediaFiles },
       htmlText
     );
   } catch (err) {

@@ -139,6 +139,7 @@ interface VaibeCodePayload {
   locale: "uk" | "en";
   content: string;
   excerpt?: string;
+  coverImage?: string;
   published: boolean;
   publishedAt?: string;
   tags?: string[];
@@ -195,30 +196,68 @@ async function publishToVaibeCod(payload: VaibeCodePayload): Promise<VaibeCodeRe
   }
 }
 
+// ——— Media helpers ———
+
+interface MediaFile {
+  id: number;
+  type: string;
+  filePath: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+}
+
+function mediaPublicUrl(mediaId: number): string {
+  const base = config.vaibeCod.publicUrl.replace(/\/$/, "");
+  return `${base}/api/public/media/${mediaId}`;
+}
+
+function buildMediaHtml(mediaFiles: MediaFile[]): string {
+  if (mediaFiles.length === 0) return "";
+  const parts: string[] = [];
+  for (const m of mediaFiles) {
+    const url = mediaPublicUrl(m.id);
+    if (m.type === "photo") {
+      parts.push(`<img src="${url}" alt="${m.fileName || "image"}" style="max-width:100%;height:auto;" />`);
+    } else if (m.type === "video" || m.type === "animation") {
+      parts.push(`<video src="${url}" controls style="max-width:100%;height:auto;"></video>`);
+    }
+  }
+  return parts.length > 0 ? `<div>${parts.join("")}</div>` : "";
+}
+
+function getCoverImage(mediaFiles: MediaFile[]): string | undefined {
+  const photo = mediaFiles.find((m) => m.type === "photo");
+  return photo ? mediaPublicUrl(photo.id) : undefined;
+}
+
 // ——— Main publish flow ———
 
 export async function publishPostToVaibeCod(
-  post: { id: number; publishedAt: Date | null; vaibeCodUrl: string | null },
+  post: { id: number; publishedAt: Date | null; vaibeCodUrl: string | null; mediaFiles?: MediaFile[] },
   htmlText: string
 ): Promise<string | null> {
   if (!config.vaibeCod.apiKey) return null;
   if (post.vaibeCodUrl) return post.vaibeCodUrl; // already published
 
   const publishedAt = post.publishedAt?.toISOString() || new Date().toISOString();
+  const media = post.mediaFiles || [];
+  const mediaHtml = buildMediaHtml(media);
+  const coverImage = getCoverImage(media);
 
   // 1. Generate SEO meta for UK
   const seoUk = await generateSeoMeta(htmlText, "uk");
   const slugUk = generateSlug(seoUk.title, post.id);
-  const contentUk = prepareContentForWeb(htmlText);
+  const contentUk = mediaHtml + prepareContentForWeb(htmlText);
 
   // 2. Publish UK version
-  console.log(`[VaibeCod] Publishing UK version for post #${post.id}...`);
+  console.log(`[VaibeCod] Publishing UK version for post #${post.id} (${media.length} media)...`);
   const resultUk = await publishToVaibeCod({
     title: seoUk.title,
     slug: slugUk,
     locale: "uk",
     content: contentUk,
     excerpt: seoUk.excerpt,
+    coverImage,
     tags: seoUk.tags,
     published: true,
     publishedAt,
@@ -229,7 +268,7 @@ export async function publishPostToVaibeCod(
   const englishContent = await translateToEnglish(htmlText);
   const seoEn = await generateSeoMeta(englishContent, "en");
   const slugEn = generateSlug(seoEn.title, post.id) + "-en";
-  const contentEn = prepareContentForWeb(englishContent);
+  const contentEn = mediaHtml + prepareContentForWeb(englishContent);
 
   // 4. Publish EN version
   console.log(`[VaibeCod] Publishing EN version for post #${post.id}...`);
@@ -239,6 +278,7 @@ export async function publishPostToVaibeCod(
     locale: "en",
     content: contentEn,
     excerpt: seoEn.excerpt,
+    coverImage,
     tags: seoEn.tags,
     published: true,
     publishedAt,
@@ -283,7 +323,7 @@ export async function syncPublishedToVaibeCod(): Promise<void> {
       }
 
       await publishPostToVaibeCod(
-        { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl },
+        { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl, mediaFiles: post.mediaFiles },
         htmlText
       );
       synced++;

@@ -35,6 +35,7 @@ export const config = {
   vaibeCod: {
     apiUrl: process.env.VAIBECOD_API_URL || "https://www.vaibecod.com/api/v1",
     apiKey: process.env.VAIBECOD_API_KEY || "",
+    publicUrl: process.env.PUBLIC_URL || "http://bdcp8kraf9s12uinqyh96fd7.176.110.103.57.sslip.io",
   },
   server: {
     port: Number(process.env.PORT || 3001),
