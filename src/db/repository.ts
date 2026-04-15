@@ -203,6 +203,22 @@ export async function getPublishedPostsWithoutVaibeCod(limit = 50, offset = 0) {
   });
 }
 
+export async function resetVaibeCodForPostsWithMedia() {
+  return prisma.post.updateMany({
+    where: {
+      status: "PUBLISHED",
+      vaibeCodUrl: { not: null },
+      mediaFiles: { some: {} },
+    },
+    data: {
+      vaibeCodId: null,
+      vaibeCodUrl: null,
+      vaibeCodIdEn: null,
+      vaibeCodUrlEn: null,
+    },
+  });
+}
+
 // ——— Media ———
 
 export async function createMedia(data: {

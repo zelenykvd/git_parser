@@ -514,6 +514,21 @@ router.post("/api/vaibecod/sync", async (_req: Request, res: Response) => {
   }
 });
 
+router.post("/api/vaibecod/resync-media", async (_req: Request, res: Response) => {
+  try {
+    const { resetVaibeCodForPostsWithMedia } = await import("../db/repository.js");
+    const { syncPublishedToVaibeCod } = await import("../bot/vaibecod.js");
+    const result = await resetVaibeCodForPostsWithMedia();
+    console.log(`[VaibeCod] Reset ${result.count} posts with media for re-sync`);
+    res.json({ ok: true, reset: result.count, message: "Re-sync started in background" });
+    syncPublishedToVaibeCod().catch((err) =>
+      console.error("[VaibeCod] Re-sync failed:", err.message)
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ——— Media ———
 
 router.get("/api/media/:id", async (req: Request, res: Response) => {
