@@ -213,9 +213,22 @@ interface MediaFile {
 /**
  * Upload a file to VaibeCod and return the uploaded path (e.g. "/uploads/1713200000-abc.jpg")
  */
-async function uploadToVaibeCod(filePath: string, fileName: string): Promise<string> {
+async function uploadToVaibeCod(filePath: string, fileName: string, mimeType?: string | null): Promise<string> {
   const fileBuffer = fs.readFileSync(filePath);
-  const blob = new Blob([fileBuffer]);
+
+  // Determine MIME type from file extension if not provided
+  if (!mimeType) {
+    const ext = path.extname(fileName).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+      ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+      ".mp4": "video/mp4", ".webm": "video/webm", ".ogg": "video/ogg",
+      ".mov": "video/mp4",
+    };
+    mimeType = mimeMap[ext] || "application/octet-stream";
+  }
+
+  const blob = new Blob([fileBuffer], { type: mimeType });
 
   const form = new FormData();
   form.append("file", blob, fileName);
@@ -248,7 +261,7 @@ async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string
       continue;
     }
     try {
-      const uploadedUrl = await uploadToVaibeCod(localPath, m.fileName || path.basename(m.filePath));
+      const uploadedUrl = await uploadToVaibeCod(localPath, m.fileName || path.basename(m.filePath), m.mimeType);
       results.push({ type: m.type, url: uploadedUrl, fileName: m.fileName || path.basename(m.filePath) });
     } catch (err) {
       console.warn(`[VaibeCod] Failed to upload media ${m.id}:`, (err as Error).message);
