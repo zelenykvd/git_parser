@@ -37,22 +37,19 @@ function isBrokenHtml(text: string): boolean {
 }
 
 /**
- * Build a ReplyInlineMarkup with a URL button for VaibeCod link.
+ * Build a buttons array for GramJS sendMessage/sendFile.
+ * GramJS expects Button[][] format for the buttons parameter.
  */
-function buildVaibeCodButton(vaibeCodUrl: string): Api.ReplyInlineMarkup {
+function buildVaibeCodButton(vaibeCodUrl: string): Api.KeyboardButtonUrl[][] {
   const fullUrl = `https://www.vaibecod.com${vaibeCodUrl}?utm_source=telegram&utm_medium=post&utm_campaign=channel`;
-  return new Api.ReplyInlineMarkup({
-    rows: [
-      new Api.KeyboardButtonRow({
-        buttons: [
-          new Api.KeyboardButtonUrl({
-            text: "Читати на сайті",
-            url: fullUrl,
-          }),
-        ],
+  return [
+    [
+      new Api.KeyboardButtonUrl({
+        text: "Читати на сайті",
+        url: fullUrl,
       }),
     ],
-  });
+  ];
 }
 
 export async function publishPost(postId: number): Promise<void> {
@@ -98,25 +95,25 @@ export async function publishPost(postId: number): Promise<void> {
     console.error(`[VaibeCod] Failed for post #${postId}, publishing to Telegram without button:`, (err as Error).message);
   }
 
-  // Build reply markup if VaibeCod URL is available
-  const replyMarkup = vaibeCodUrl ? buildVaibeCodButton(vaibeCodUrl) : undefined;
+  // Build buttons if VaibeCod URL is available
+  const buttons = vaibeCodUrl ? buildVaibeCodButton(vaibeCodUrl) : undefined;
 
   const mediaFiles = post.mediaFiles || [];
 
   if (mediaFiles.length === 0) {
     // Text-only message
-    if (replyMarkup) {
+    if (buttons) {
       await client.sendMessage(channelId, {
         message: htmlText,
         parseMode,
-        buttons: replyMarkup,
+        buttons: buttons,
       } as any);
     } else {
       await client.sendMessage(channelId, { message: htmlText, parseMode });
     }
   } else {
     // Try sending media with caption; if too long — fallback to media + separate text
-    const sendMedia = async (caption?: string, capParseMode?: "html", markup?: Api.ReplyInlineMarkup) => {
+    const sendMedia = async (caption?: string, capParseMode?: "html", markup?: Api.KeyboardButtonUrl[][]) => {
       if (mediaFiles.length === 1) {
         const media = mediaFiles[0];
         const filePath = path.join(MEDIA_DIR, media.filePath);
@@ -139,16 +136,16 @@ export async function publishPost(postId: number): Promise<void> {
     };
 
     try {
-      await sendMedia(htmlText, parseMode, replyMarkup);
+      await sendMedia(htmlText, parseMode, buttons);
     } catch (err: any) {
       if (err.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
         // Caption too long — send media without caption, then text separately
         await sendMedia();
-        if (replyMarkup) {
+        if (buttons) {
           await client.sendMessage(channelId, {
             message: htmlText,
             parseMode,
-            buttons: replyMarkup,
+            buttons: buttons,
           } as any);
         } else {
           await client.sendMessage(channelId, { message: htmlText, parseMode });
