@@ -114,7 +114,7 @@ export function cancelFetchHistory(channelId: number) {
   return request(`/channels/${channelId}/fetch-cancel`, { method: "POST" });
 }
 
-export function fetchAllTasks(): Promise<{ channelId: number; channelLabel: string; fetched: number; saved: number; done: boolean; error?: string }[]> {
+export function fetchAllTasks(): Promise<{ channelId: number; channelLabel: string; fetched: number; saved: number; skipped: number; done: boolean; error?: string; phase?: string }[]> {
   return request(`/fetch-tasks`);
 }
 
@@ -136,10 +136,10 @@ export function fetchChannels() {
   return request("/channels");
 }
 
-export function addChannel(username: string, title?: string) {
+export function addChannel(data: { username?: string; telegramId?: string; title?: string }) {
   return request("/channels", {
     method: "POST",
-    body: JSON.stringify({ username, title }),
+    body: JSON.stringify(data),
   });
 }
 
