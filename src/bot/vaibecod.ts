@@ -260,7 +260,10 @@ async function uploadToVaibeCod(filePath: string, fileName: string, mimeType?: s
  */
 async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string; url: string; fileName: string }[]> {
   const results: { type: string; url: string; fileName: string }[] = [];
+  const seen = new Set<string>();
   for (const m of mediaFiles) {
+    if (seen.has(m.filePath)) continue;
+    seen.add(m.filePath);
     const localPath = path.join(MEDIA_DIR, m.filePath);
     if (!fs.existsSync(localPath)) {
       console.warn(`[VaibeCod] Media file not found: ${localPath}, skipping`);
