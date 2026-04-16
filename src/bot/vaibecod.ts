@@ -76,27 +76,50 @@ export function prepareContentForWeb(htmlText: string): string {
 
 // ——— SEO generation via AI ———
 
+interface TagMeta {
+  slug: string;
+  nameUk: string;
+  nameEn: string;
+}
+
 interface SeoMeta {
   title: string;
   excerpt: string;
-  tags: string[];
+  tags: TagMeta[];
 }
 
 const SEO_PROMPT_UK = `Ти — SEO-спеціаліст. На основі тексту статті створи:
 1. title — SEO-заголовок українською (до 70 символів)
 2. excerpt — meta description українською (до 160 символів)
-3. tags — масив з 3-5 тегів-slug (латиницею, lowercase, через дефіс, наприклад: "ai-tools", "web-dev")
+3. tags — масив з 3-5 тегів, кожен з полями: slug (латиницею, lowercase, через дефіс), nameUk (українська назва), nameEn (англійська назва)
 
 Поверни ТІЛЬКИ валідний JSON без markdown-обгортки:
-{"title": "...", "excerpt": "...", "tags": ["...", "..."]}`;
+{"title": "...", "excerpt": "...", "tags": [{"slug": "ai-tools", "nameUk": "AI інструменти", "nameEn": "AI Tools"}, ...]}`;
 
 const SEO_PROMPT_EN = `You are an SEO specialist. Based on the article text, create:
 1. title — SEO title in English (up to 70 characters)
 2. excerpt — meta description in English (up to 160 characters)
-3. tags — array of 3-5 tag slugs (lowercase, hyphen-separated, e.g. "ai-tools", "web-dev")
+3. tags — array of 3-5 tags, each with fields: slug (lowercase, hyphen-separated), nameUk (Ukrainian name), nameEn (English name)
 
 Return ONLY valid JSON without markdown wrapping:
-{"title": "...", "excerpt": "...", "tags": ["...", "..."]}`;
+{"title": "...", "excerpt": "...", "tags": [{"slug": "ai-tools", "nameUk": "AI інструменти", "nameEn": "AI Tools"}, ...]}`;
+
+function parseTags(rawTags: unknown): TagMeta[] {
+  if (!Array.isArray(rawTags)) return [];
+  return rawTags.slice(0, 5).map((t) => {
+    if (typeof t === "string") {
+      return { slug: t, nameUk: t.replace(/-/g, " "), nameEn: t.replace(/-/g, " ") };
+    }
+    if (t && typeof t === "object") {
+      return {
+        slug: String(t.slug || ""),
+        nameUk: String(t.nameUk || t.slug || "").slice(0, 100),
+        nameEn: String(t.nameEn || t.slug || "").slice(0, 100),
+      };
+    }
+    return null;
+  }).filter((t): t is TagMeta => t !== null && t.slug.length > 0);
+}
 
 export async function generateSeoMeta(htmlText: string, locale: "uk" | "en"): Promise<SeoMeta> {
   const prompt = locale === "uk" ? SEO_PROMPT_UK : SEO_PROMPT_EN;
@@ -108,7 +131,7 @@ export async function generateSeoMeta(htmlText: string, locale: "uk" | "en"): Pr
     return {
       title: String(parsed.title || "").slice(0, 200),
       excerpt: String(parsed.excerpt || "").slice(0, 500),
-      tags: Array.isArray(parsed.tags) ? parsed.tags.map(String).slice(0, 5) : [],
+      tags: parseTags(parsed.tags),
     };
   } catch (err) {
     console.warn(`[VaibeCod] SEO generation failed (${locale}), using fallback:`, (err as Error).message);
@@ -144,7 +167,7 @@ interface VaibeCodePayload {
   coverImage?: string;
   published: boolean;
   publishedAt?: string;
-  tags?: string[];
+  tags?: TagMeta[];
 }
 
 interface VaibeCodeResponse {
