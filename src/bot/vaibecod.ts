@@ -310,8 +310,12 @@ export async function publishPostToVaibeCod(
     console.log(`[VaibeCod] Uploading ${media.length} media files for post #${post.id}...`);
     uploadedMedia = await uploadMediaFiles(media);
   }
-  const mediaHtml = buildMediaHtml(uploadedMedia);
   const coverImage = uploadedMedia.find((m) => m.type === "photo")?.url;
+  // Exclude cover image from content — it's already shown as preview
+  const contentMedia = coverImage
+    ? uploadedMedia.filter((m) => m.url !== coverImage)
+    : uploadedMedia;
+  const mediaHtml = buildMediaHtml(contentMedia);
 
   // 1. Generate SEO meta for UK
   const seoUk = await generateSeoMeta(htmlText, "uk");
