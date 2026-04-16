@@ -66,6 +66,11 @@ export function prepareContentForWeb(htmlText: string): string {
   let content = htmlText;
   // Replace Telegram-specific spoiler tag
   content = content.replace(/<spoiler>/g, "<span>").replace(/<\/spoiler>/g, "</span>");
+  // Auto-link plain URLs that are not already inside <a> tags
+  content = content.replace(
+    /(?<!href="|">)(https?:\/\/[^\s<]+)/g,
+    '<a href="$1">$1</a>'
+  );
   // Convert double newlines to paragraphs, single to <br>
   const paragraphs = content.split(/\n\n+/);
   content = paragraphs

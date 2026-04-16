@@ -137,6 +137,7 @@ function entityToTags(e: EntityRange): [string, string] {
       ? [`<pre><code class="language-${e.language}">`, "</code></pre>"]
       : ["<pre>", "</pre>"];
     case "textUrl": return [`<a href="${e.url}">`, "</a>"];
+    case "url": return ["%%URL_OPEN%%", "%%URL_CLOSE%%"];
     case "strikethrough": return ["<s>", "</s>"];
     case "underline": return ["<u>", "</u>"];
     case "blockquote": return ["<blockquote>", "</blockquote>"];
@@ -204,6 +205,11 @@ export function entitiesToTelegramHtml(
       }
     }
   }
+
+  // Post-process: replace URL placeholders with actual <a> tags
+  result = result.replace(/%%URL_OPEN%%(.*?)%%URL_CLOSE%%/g, (_, url) => {
+    return `<a href="${url}">${url}</a>`;
+  });
 
   return result;
 }
