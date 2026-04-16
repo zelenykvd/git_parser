@@ -319,10 +319,31 @@ async function uploadToVaibeCod(filePath: string, fileName: string, mimeType?: s
 }
 
 /**
- * Upload all media files to VaibeCod, return array of { type, uploadedUrl }
+ * Generate a thumbnail from a video file using ffmpeg.
+ * Returns the path to the thumbnail, or null if ffmpeg is not available.
  */
-async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string; url: string; fileName: string }[]> {
-  const results: { type: string; url: string; fileName: string }[] = [];
+async function generateVideoThumbnail(videoPath: string): Promise<string | null> {
+  const { execSync } = await import("child_process");
+  const thumbPath = videoPath + ".thumb.jpg";
+
+  try {
+    execSync(
+      `ffmpeg -i "${videoPath}" -ss 00:00:01 -frames:v 1 -q:v 5 -vf "scale=640:-1" "${thumbPath}" -y`,
+      { timeout: 10000, stdio: "pipe" }
+    );
+    if (fs.existsSync(thumbPath)) return thumbPath;
+  } catch {
+    // ffmpeg not available or failed — skip thumbnail
+  }
+  return null;
+}
+
+/**
+ * Upload all media files to VaibeCod, return array of { type, uploadedUrl }
+ * For videos, also generates and uploads a thumbnail poster image.
+ */
+async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string; url: string; fileName: string; poster?: string }[]> {
+  const results: { type: string; url: string; fileName: string; poster?: string }[] = [];
   const seen = new Set<string>();
   for (const m of mediaFiles) {
     if (seen.has(m.filePath)) continue;
@@ -334,7 +355,24 @@ async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string
     }
     try {
       const uploadedUrl = await uploadToVaibeCod(localPath, m.fileName || path.basename(m.filePath), m.mimeType);
-      results.push({ type: m.type, url: uploadedUrl, fileName: m.fileName || path.basename(m.filePath) });
+      let poster: string | undefined;
+
+      // Generate and upload thumbnail for videos
+      if (m.type === "video" || m.type === "animation") {
+        const thumbPath = await generateVideoThumbnail(localPath);
+        if (thumbPath) {
+          try {
+            poster = await uploadToVaibeCod(thumbPath, path.basename(thumbPath), "image/jpeg");
+            console.log(`[VaibeCod] Video thumbnail uploaded: ${poster}`);
+          } catch (err) {
+            console.warn(`[VaibeCod] Failed to upload thumbnail:`, (err as Error).message);
+          }
+          // Clean up temp file
+          try { fs.unlinkSync(thumbPath); } catch {}
+        }
+      }
+
+      results.push({ type: m.type, url: uploadedUrl, fileName: m.fileName || path.basename(m.filePath), poster });
     } catch (err) {
       console.warn(`[VaibeCod] Failed to upload media ${m.id}:`, (err as Error).message);
     }
@@ -342,14 +380,15 @@ async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string
   return results;
 }
 
-function buildMediaHtml(uploadedMedia: { type: string; url: string; fileName: string }[]): string {
+function buildMediaHtml(uploadedMedia: { type: string; url: string; fileName: string; poster?: string }[]): string {
   if (uploadedMedia.length === 0) return "";
   const parts: string[] = [];
   for (const m of uploadedMedia) {
     if (m.type === "photo") {
       parts.push(`<img src="${m.url}" alt="${m.fileName}" style="max-width:100%;height:auto;" />`);
     } else if (m.type === "video" || m.type === "animation") {
-      parts.push(`<video src="${m.url}" controls style="max-width:100%;height:auto;"></video>`);
+      const posterAttr = m.poster ? ` poster="${m.poster}"` : "";
+      parts.push(`<video src="${m.url}"${posterAttr} controls style="max-width:100%;height:auto;"></video>`);
     }
   }
   return parts.length > 0 ? `<div>${parts.join("")}</div>` : "";
