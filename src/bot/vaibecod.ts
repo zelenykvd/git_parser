@@ -93,6 +93,10 @@ function githubLinkToCard(url: string): string {
 
 export function prepareContentForWeb(htmlText: string): string {
   let content = htmlText;
+  // Strip emoji characters
+  content = content.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "");
+  // Clean up leftover whitespace from removed emoji
+  content = content.replace(/  +/g, " ");
   // Replace Telegram-specific spoiler tag
   content = content.replace(/<spoiler>/g, "<span>").replace(/<\/spoiler>/g, "</span>");
   // Auto-link plain URLs that are not already inside <a> tags
