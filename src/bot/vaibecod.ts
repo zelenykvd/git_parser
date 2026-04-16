@@ -138,11 +138,9 @@ export async function translateToEnglish(htmlText: string): Promise<string> {
 // ——— VaibeCod API client ———
 
 interface VaibeCodePayload {
-  title: string;
   slug: string;
-  locale: "uk" | "en";
-  content: string;
-  excerpt?: string;
+  uk?: { title: string; content: string; excerpt?: string };
+  en?: { title: string; content: string; excerpt?: string };
   coverImage?: string;
   published: boolean;
   publishedAt?: string;
@@ -150,11 +148,10 @@ interface VaibeCodePayload {
 }
 
 interface VaibeCodeResponse {
-  id: string;
+  translationId: string;
   slug: string;
-  locale: string;
   published: boolean;
-  url: string;
+  posts: { id: string; slug: string; locale: string; url: string }[];
 }
 
 async function publishToVaibeCod(payload: VaibeCodePayload): Promise<VaibeCodeResponse> {
@@ -319,49 +316,48 @@ export async function publishPostToVaibeCod(
 
   // 1. Generate SEO meta for UK
   const seoUk = await generateSeoMeta(htmlText, "uk");
-  const slugUk = generateSlug(seoUk.title, post.id);
+  const slug = generateSlug(seoUk.title, post.id);
   const contentUk = mediaHtml + prepareContentForWeb(htmlText);
 
-  // 2. Publish UK version
-  console.log(`[VaibeCod] Publishing UK version for post #${post.id} (${media.length} media)...`);
-  const resultUk = await publishToVaibeCod({
-    title: seoUk.title,
-    slug: slugUk,
-    locale: "uk",
-    content: contentUk,
-    excerpt: seoUk.excerpt,
+  // 2. Translate to English and generate SEO
+  console.log(`[VaibeCod] Translating to English for post #${post.id}...`);
+  const englishContent = await translateToEnglish(htmlText);
+  const seoEn = await generateSeoMeta(englishContent, "en");
+  const contentEn = mediaHtml + prepareContentForWeb(englishContent);
+
+  // 3. Publish both locales in a single API call
+  console.log(`[VaibeCod] Publishing post #${post.id} (uk+en, ${media.length} media)...`);
+  const result = await publishToVaibeCod({
+    slug,
+    uk: {
+      title: seoUk.title,
+      content: contentUk,
+      excerpt: seoUk.excerpt,
+    },
+    en: {
+      title: seoEn.title,
+      content: contentEn,
+      excerpt: seoEn.excerpt,
+    },
     coverImage,
     tags: seoUk.tags,
     published: true,
     publishedAt,
   });
 
-  // 3. Translate to English
-  console.log(`[VaibeCod] Translating to English for post #${post.id}...`);
-  const englishContent = await translateToEnglish(htmlText);
-  const seoEn = await generateSeoMeta(englishContent, "en");
-  const slugEn = generateSlug(seoEn.title, post.id) + "-en";
-  const contentEn = mediaHtml + prepareContentForWeb(englishContent);
+  // 4. Save results
+  const ukPost = result.posts.find((p) => p.locale === "uk");
+  const enPost = result.posts.find((p) => p.locale === "en");
+  await updatePostVaibeCod(
+    post.id,
+    ukPost?.id || result.translationId,
+    ukPost?.url || result.posts[0]?.url || `/uk/blog/${slug}`,
+    enPost?.id || "",
+    enPost?.url || `/en/blog/${slug}`
+  );
+  console.log(`[VaibeCod] Post #${post.id} published: UK=${ukPost?.url}, EN=${enPost?.url}`);
 
-  // 4. Publish EN version
-  console.log(`[VaibeCod] Publishing EN version for post #${post.id}...`);
-  const resultEn = await publishToVaibeCod({
-    title: seoEn.title,
-    slug: slugEn,
-    locale: "en",
-    content: contentEn,
-    excerpt: seoEn.excerpt,
-    coverImage,
-    tags: seoEn.tags,
-    published: true,
-    publishedAt,
-  });
-
-  // 5. Save both results
-  await updatePostVaibeCod(post.id, resultUk.id, resultUk.url, resultEn.id, resultEn.url);
-  console.log(`[VaibeCod] Post #${post.id} published: UK=${resultUk.url}, EN=${resultEn.url}`);
-
-  return resultUk.url;
+  return ukPost?.url || result.posts[0]?.url || null;
 }
 
 // ——— Sync already published posts ———
