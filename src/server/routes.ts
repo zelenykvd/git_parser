@@ -500,6 +500,20 @@ router.get("/api/telegram/avatar/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ——— Media Repair ———
+
+router.post("/api/media/repair", async (_req: Request, res: Response) => {
+  try {
+    const { repairMissingMedia } = await import("../media/repair.js");
+    res.json({ ok: true, message: "Media repair started in background" });
+    repairMissingMedia().catch((err) =>
+      console.error("[MediaRepair] Manual repair failed:", err.message)
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ——— VaibeCod Sync ———
 
 router.post("/api/vaibecod/sync", async (_req: Request, res: Response) => {

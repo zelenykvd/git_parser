@@ -219,6 +219,14 @@ export async function resetVaibeCodForPostsWithMedia() {
   });
 }
 
+export async function getPostsWithMedia() {
+  return prisma.post.findMany({
+    where: { mediaFiles: { some: {} } },
+    include: { mediaFiles: true, channel: true },
+    orderBy: { id: "asc" },
+  });
+}
+
 // ——— Media ———
 
 export async function createMedia(data: {

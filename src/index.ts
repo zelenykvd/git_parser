@@ -4,6 +4,7 @@ import { startListener } from "./parser/listener.js";
 import { startPoller } from "./parser/poller.js";
 import { prisma } from "./db/repository.js";
 import { syncPublishedToVaibeCod } from "./bot/vaibecod.js";
+import { repairMissingMedia } from "./media/repair.js";
 
 export async function main() {
   console.log("Starting Telegram Parser & Translator...\n");
@@ -30,6 +31,13 @@ export async function main() {
       "Telegram credentials not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env"
     );
     console.log("API server is running — you can configure channels via the admin panel.");
+  }
+
+  // Repair missing media files from Telegram
+  if (config.telegram.apiId && config.telegram.apiHash) {
+    repairMissingMedia().catch((err) =>
+      console.error("[MediaRepair] Failed:", err.message)
+    );
   }
 
   // Auto-sync published posts to VaibeCod
