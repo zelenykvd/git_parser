@@ -74,7 +74,11 @@ export async function publishPost(postId: number): Promise<void> {
       htmlText = stripHtmlTags(stripMarkdownArtifacts(post.translatedText));
       parseMode = undefined;
     } else {
-      htmlText = post.translatedText;
+      // Auto-link plain URLs not already inside <a> tags
+      htmlText = post.translatedText.replace(
+        /(?<!href="|">)(https?:\/\/[^\s<]+)/g,
+        '<a href="$1">$1</a>'
+      );
     }
   } else {
     // No translation — convert from entities
