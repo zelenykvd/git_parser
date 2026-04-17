@@ -88,7 +88,7 @@ function githubLinkToCard(url: string): string {
   const repo = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : label;
   const showUrl = parts.length > 2 ? label : `github.com/${label}`;
 
-  return `<a href="${url}" class="github-card" target="_blank" rel="noopener noreferrer">${GITHUB_ICON}<span class="github-card-body"><span class="github-card-repo">${repo}</span><span class="github-card-url">${showUrl}</span></span>${ARROW_ICON}</a>`;
+  return `<a href="${url}" class="github-card" target="_blank" rel="noopener noreferrer">${GITHUB_ICON}<span class="github-card-body"><span class="github-card-repo">${repo}</span><br/><span class="github-card-url">${showUrl}</span></span>${ARROW_ICON}</a>`;
 }
 
 export function prepareContentForWeb(htmlText: string): string {
