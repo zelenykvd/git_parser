@@ -3,7 +3,7 @@ import { Api } from "telegram";
 import { config } from "../config.js";
 import { getPost, updatePostStatus } from "../db/repository.js";
 import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
-import { getTelegramClient } from "../parser/client.js";
+import { getBotClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
 
 const MEDIA_DIR = path.resolve("media");
@@ -57,7 +57,7 @@ export async function publishPost(postId: number): Promise<void> {
   if (!post) throw new Error(`Post #${postId} not found`);
   if (post.status !== "APPROVED") throw new Error(`Post #${postId} is not approved`);
 
-  const client = await getTelegramClient();
+  const client = await getBotClient();
   const channelId = post.channel.targetChannelId || config.telegram.targetChannelId;
   if (!channelId) {
     throw new Error(`No target channel configured for source @${post.channel.username}`);

@@ -23,9 +23,18 @@ import {
   getSubscriptionByUsername,
   updateSubscriptionAvatar,
   createMedia,
+  setEncryptedSetting,
+  getEncryptedSetting,
+  deleteSetting,
 } from "../db/repository.js";
 import { publishPost } from "../bot/publisher.js";
-import { getTelegramClient } from "../parser/client.js";
+import {
+  getTelegramClient,
+  BOT_TOKEN_KEY,
+  verifyBotToken,
+  disconnectBotClient,
+} from "../parser/client.js";
+import { maskToken } from "../lib/crypto.js";
 import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
 import { translateText, verifyTranslation } from "../translator/llm.js";
 import { fetchChannelHistory } from "../parser/history.js";
@@ -600,6 +609,64 @@ router.delete("/api/media/:id", async (req: Request, res: Response) => {
 
     await deleteMedia(media.id);
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ——— Settings: Telegram bot token (encrypted at rest) ———
+
+router.get("/api/settings/bot-token", async (_req: Request, res: Response) => {
+  try {
+    const token = await getEncryptedSetting(BOT_TOKEN_KEY);
+    if (!token) return res.json({ configured: false });
+    res.json({ configured: true, masked: maskToken(token) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/settings/bot-token", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    if (typeof token !== "string" || !token.trim()) {
+      return res.status(400).json({ error: "Token is required" });
+    }
+    const trimmed = token.trim();
+    // Basic shape check: bots tokens are "<id>:<secret>"
+    if (!/^\d+:[\w-]+$/.test(trimmed)) {
+      return res.status(400).json({ error: "Invalid bot token format" });
+    }
+
+    // Verify with Telegram before persisting
+    let me;
+    try {
+      me = await verifyBotToken(trimmed);
+    } catch (err: any) {
+      return res
+        .status(400)
+        .json({ error: `Token verification failed: ${err.message}` });
+    }
+
+    await setEncryptedSetting(BOT_TOKEN_KEY, trimmed);
+    // Drop cached bot client so the next publish uses the new token
+    await disconnectBotClient();
+
+    res.json({
+      configured: true,
+      masked: maskToken(trimmed),
+      bot: me,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/api/settings/bot-token", async (_req: Request, res: Response) => {
+  try {
+    await deleteSetting(BOT_TOKEN_KEY);
+    await disconnectBotClient();
+    res.json({ configured: false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

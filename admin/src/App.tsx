@@ -4,6 +4,7 @@ import PostList from "./pages/PostList";
 import PostDetail from "./pages/PostDetail";
 import Channels from "./pages/Channels";
 import ChannelDetail from "./pages/ChannelDetail";
+import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import { isLoggedIn, clearToken } from "./auth";
 import Icon from "./components/Icon";
@@ -43,6 +44,9 @@ function NavBar() {
               <NavLink to="/channels" className={linkClass}>
                 <Icon name="rss_feed" size={18} /> Канали
               </NavLink>
+              <NavLink to="/settings" className={linkClass}>
+                <Icon name="settings" size={18} /> Налаштування
+              </NavLink>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -65,6 +69,9 @@ function NavBar() {
           </NavLink>
           <NavLink to="/channels" className={mobileLinkClass} onClick={handleNavClick}>
             <Icon name="rss_feed" size={20} /> Канали
+          </NavLink>
+          <NavLink to="/settings" className={mobileLinkClass} onClick={handleNavClick}>
+            <Icon name="settings" size={20} /> Налаштування
           </NavLink>
           <button onClick={() => { clearToken(); navigate("/login", { replace: true }); }}
             className="flex items-center gap-3 w-full px-4 py-3.5 text-sm font-medium text-neutral-400">
@@ -92,6 +99,7 @@ export default function App() {
                   <Route path="/posts/:id" element={<PostDetail />} />
                   <Route path="/channels" element={<Channels />} />
                   <Route path="/channels/:id" element={<ChannelDetail />} />
+                  <Route path="/settings" element={<Settings />} />
                 </Routes>
               </main>
             </div>

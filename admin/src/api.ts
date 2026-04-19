@@ -184,3 +184,25 @@ export async function uploadMedia(postId: number, file: File) {
 export async function deleteMedia(id: number) {
   return request(`/media/${id}`, { method: "DELETE" });
 }
+
+// Settings: bot token
+export interface BotTokenStatus {
+  configured: boolean;
+  masked?: string;
+  bot?: { id: string; username: string | null; firstName: string | null };
+}
+
+export function fetchBotTokenStatus(): Promise<BotTokenStatus> {
+  return request("/settings/bot-token");
+}
+
+export function saveBotToken(token: string): Promise<BotTokenStatus> {
+  return request("/settings/bot-token", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function deleteBotToken(): Promise<BotTokenStatus> {
+  return request("/settings/bot-token", { method: "DELETE" });
+}

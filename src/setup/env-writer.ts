@@ -18,6 +18,7 @@ export interface EnvValues {
   ADMIN_USERNAME: string;
   ADMIN_PASSWORD: string;
   JWT_SECRET: string;
+  SETTINGS_ENCRYPTION_KEY: string;
   POLLER_INTERVAL_MS: string;
   POLLER_INITIAL_SYNC_DAYS: string;
 }
@@ -49,6 +50,7 @@ const REQUIRED_VARS = [
   "DATABASE_URL",
   "ADMIN_PASSWORD",
   "JWT_SECRET",
+  "SETTINGS_ENCRYPTION_KEY",
   "LLM_API_KEY",
 ] as const;
 

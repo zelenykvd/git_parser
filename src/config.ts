@@ -1,8 +1,42 @@
 import "dotenv/config";
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env variable: ${name}`);
+  return value;
+}
+
+/**
+ * Ensure a local secret env var exists. If missing, generate a random 32-byte
+ * hex value and append it to the project's .env file so subsequent restarts
+ * see it. Used for values that should never round-trip through setup UI
+ * (e.g. encryption keys migrated into an already-installed deployment).
+ */
+function ensureLocalSecret(name: string): string {
+  const existing = process.env[name];
+  if (existing && existing.trim()) return existing;
+
+  const value = crypto.randomBytes(32).toString("hex");
+  process.env[name] = value;
+
+  try {
+    const envPath = path.resolve(process.cwd(), ".env");
+    const line = `${name}=${value}\n`;
+    if (fs.existsSync(envPath)) {
+      fs.appendFileSync(envPath, line);
+    } else {
+      fs.writeFileSync(envPath, line);
+    }
+    console.log(`[config] Generated ${name} and wrote it to .env`);
+  } catch (err) {
+    console.warn(
+      `[config] Generated ${name} in memory but could not persist to .env:`,
+      (err as Error).message
+    );
+  }
   return value;
 }
 
@@ -27,6 +61,9 @@ export const config = {
     adminUsername: process.env.ADMIN_USERNAME || "admin",
     adminPassword: required("ADMIN_PASSWORD"),
     jwtSecret: required("JWT_SECRET"),
+  },
+  settings: {
+    encryptionKey: ensureLocalSecret("SETTINGS_ENCRYPTION_KEY"),
   },
   poller: {
     intervalMs: Number(process.env.POLLER_INTERVAL_MS || "60000"),
