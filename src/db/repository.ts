@@ -1,4 +1,5 @@
 import { PrismaClient, Status } from "@prisma/client";
+import { encryptSecret, decryptSecret } from "../lib/crypto.js";
 
 export const prisma = new PrismaClient();
 
@@ -295,4 +296,30 @@ export async function updateSubscriptionAvatar(telegramId: string, avatarPath: s
     where: { telegramId },
     data: { avatarPath },
   });
+}
+
+// ——— Settings (encrypted secrets) ———
+
+export async function setEncryptedSetting(key: string, plaintext: string): Promise<void> {
+  const value = encryptSecret(plaintext);
+  await prisma.setting.upsert({
+    where: { key },
+    update: { value },
+    create: { key, value },
+  });
+}
+
+export async function getEncryptedSetting(key: string): Promise<string | null> {
+  const row = await prisma.setting.findUnique({ where: { key } });
+  if (!row) return null;
+  try {
+    return decryptSecret(row.value);
+  } catch (err) {
+    console.error(`[Settings] Failed to decrypt ${key}:`, (err as Error).message);
+    return null;
+  }
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  await prisma.setting.deleteMany({ where: { key } });
 }

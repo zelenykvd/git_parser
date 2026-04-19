@@ -128,6 +128,7 @@ export function createSetupRouter(onComplete: () => void) {
       } = req.body;
 
       const jwtSecret = crypto.randomBytes(32).toString("hex");
+      const settingsEncryptionKey = crypto.randomBytes(32).toString("hex");
 
       const envValues: EnvValues = {
         TELEGRAM_API_ID: tgApiId || "",
@@ -142,6 +143,7 @@ export function createSetupRouter(onComplete: () => void) {
         ADMIN_USERNAME: adminUser || "admin",
         ADMIN_PASSWORD: adminPass,
         JWT_SECRET: jwtSecret,
+        SETTINGS_ENCRYPTION_KEY: settingsEncryptionKey,
         POLLER_INTERVAL_MS: pollInterval || "60000",
         POLLER_INITIAL_SYNC_DAYS: pollDays || "30",
       };
