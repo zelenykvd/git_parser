@@ -84,7 +84,7 @@ export async function getBotClient(): Promise<TelegramClient> {
   botClient = new TelegramClient(session, config.telegram.apiId, config.telegram.apiHash, {
     connectionRetries: 5,
   });
-  await botClient.start({ botAuthToken: async () => token });
+  await botClient.start({ botAuthToken: token });
   botClientToken = token;
   return botClient;
 }
@@ -109,7 +109,7 @@ export async function verifyBotToken(
     connectionRetries: 2,
   });
   try {
-    await tmp.start({ botAuthToken: async () => token });
+    await tmp.start({ botAuthToken: token });
     const me = await tmp.getMe();
     const id = (me as any).id?.toString?.() ?? String((me as any).id);
     return {
