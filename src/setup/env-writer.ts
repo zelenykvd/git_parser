@@ -50,7 +50,6 @@ const REQUIRED_VARS = [
   "DATABASE_URL",
   "ADMIN_PASSWORD",
   "JWT_SECRET",
-  "SETTINGS_ENCRYPTION_KEY",
   "LLM_API_KEY",
 ] as const;
 
