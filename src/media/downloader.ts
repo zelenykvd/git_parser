@@ -2,9 +2,53 @@ import { TelegramClient } from "telegram";
 import { Api } from "telegram";
 import * as fs from "fs";
 import * as path from "path";
-import { createMedia, getMediaByPostId } from "../db/repository.js";
+import { createMedia } from "../db/repository.js";
 
 const MEDIA_DIR = path.resolve("media");
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+
+async function downloadWithRetry(
+  client: TelegramClient,
+  message: Api.Message
+): Promise<Buffer | null> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const buffer = await client.downloadMedia(message.media!, {});
+      if (buffer && (buffer as Buffer).length > 0) {
+        return buffer as Buffer;
+      }
+      console.warn(
+        `[Downloader] msg ${message.id}: empty buffer from message.media (attempt ${attempt}/${MAX_ATTEMPTS})`
+      );
+    } catch (err) {
+      console.warn(
+        `[Downloader] msg ${message.id}: attempt ${attempt}/${MAX_ATTEMPTS} failed:`,
+        (err as Error).message
+      );
+    }
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+    }
+  }
+
+  // Fallback: download the full message instead of just .media
+  try {
+    const buffer = await client.downloadMedia(message, {});
+    if (buffer && (buffer as Buffer).length > 0) {
+      console.log(`[Downloader] msg ${message.id}: recovered via message fallback`);
+      return buffer as Buffer;
+    }
+    console.warn(`[Downloader] msg ${message.id}: fallback returned empty buffer`);
+  } catch (err) {
+    console.warn(
+      `[Downloader] msg ${message.id}: fallback failed:`,
+      (err as Error).message
+    );
+  }
+  console.error(`[Downloader] msg ${message.id}: giving up — no media saved`);
+  return null;
+}
 
 export async function downloadMessageMedia(
   client: TelegramClient,
@@ -19,7 +63,19 @@ export async function downloadMessageMedia(
 
   try {
     if (message.photo || message.media instanceof Api.MessageMediaPhoto) {
-      await downloadAndSave(client, message, dir, postId, "photo");
+      const fileName = `photo_${message.id}.jpg`;
+      const filePath = path.join(dir, fileName);
+      const buffer = await downloadWithRetry(client, message);
+      if (!buffer) return;
+      fs.writeFileSync(filePath, buffer);
+      await createMedia({
+        postId,
+        type: "photo",
+        filePath: path.relative(MEDIA_DIR, filePath),
+        fileName,
+        mimeType: "image/jpeg",
+      });
+      console.log(`Downloaded photo: ${fileName}`);
     } else if (message.video || message.media instanceof Api.MessageMediaDocument) {
       const doc = (message.media as Api.MessageMediaDocument)
         .document as Api.Document;
@@ -52,44 +108,23 @@ export async function downloadMessageMedia(
       }
 
       const filePath = path.join(dir, fileName);
-      const buffer = await client.downloadMedia(message.media, {});
-      if (buffer) {
-        fs.writeFileSync(filePath, buffer as Buffer);
-        await createMedia({
-          postId,
-          type,
-          filePath: path.relative(MEDIA_DIR, filePath),
-          fileName,
-          mimeType,
-        });
-        console.log(`Downloaded ${type}: ${fileName}`);
-      }
+      const buffer = await downloadWithRetry(client, message);
+      if (!buffer) return;
+      fs.writeFileSync(filePath, buffer);
+      await createMedia({
+        postId,
+        type,
+        filePath: path.relative(MEDIA_DIR, filePath),
+        fileName,
+        mimeType,
+      });
+      console.log(`Downloaded ${type}: ${fileName}`);
+    } else {
+      console.warn(
+        `[Downloader] msg ${message.id}: unhandled media type ${message.media.className}`
+      );
     }
   } catch (err) {
-    console.error(`Failed to download media for post ${postId}:`, err);
-  }
-}
-
-async function downloadAndSave(
-  client: TelegramClient,
-  message: Api.Message,
-  dir: string,
-  postId: number,
-  type: string
-) {
-  const fileName = `photo_${message.id}.jpg`;
-  const filePath = path.join(dir, fileName);
-
-  const buffer = await client.downloadMedia(message.media!, {});
-  if (buffer) {
-    fs.writeFileSync(filePath, buffer as Buffer);
-    await createMedia({
-      postId,
-      type,
-      filePath: path.relative(MEDIA_DIR, filePath),
-      fileName,
-      mimeType: "image/jpeg",
-    });
-    console.log(`Downloaded photo: ${fileName}`);
+    console.error(`Failed to download media for post ${postId} (msg ${message.id}):`, err);
   }
 }
