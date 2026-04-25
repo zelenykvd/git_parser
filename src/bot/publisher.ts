@@ -6,6 +6,7 @@ import { getPost, updatePostStatus } from "../db/repository.js";
 import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getBotClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
+import { shortenForAlbumCaption } from "../translator/llm.js";
 
 const MEDIA_DIR = path.resolve("media");
 const ALBUM_CAPTION_LIMIT = 1024;
@@ -162,10 +163,32 @@ export async function publishPost(postId: number): Promise<void> {
     }
   } else {
     // Album: Telegram limits caption to 1024 chars on the first item and does NOT support inline buttons.
-    // Strategy: if caption fits, attach it to the album, then post the button as a tiny follow-up.
-    //          if caption is too long, send the album without caption and post full text+button after.
+    // VaibeCod (site) already received the FULL original htmlText above — shortening here is Telegram-only.
+    // Strategy:
+    //   1. If full text fits — use it as caption.
+    //   2. Otherwise ask the LLM for a self-contained shortened version that fits the limit.
+    //   3. If even that fails or stays too long — send album without caption + full text follow-up.
     const files = mediaFiles.map((m) => path.join(MEDIA_DIR, m.filePath));
-    const captionFits = htmlText.length <= ALBUM_CAPTION_LIMIT;
+    let captionText: string | undefined = undefined;
+
+    if (htmlText.length <= ALBUM_CAPTION_LIMIT) {
+      captionText = htmlText;
+    } else if (parseMode === "html") {
+      // Leave a small safety margin so the LLM is not penalised for going slightly over.
+      const target = ALBUM_CAPTION_LIMIT - 24;
+      try {
+        console.log(`Post #${postId}: caption ${htmlText.length} > ${ALBUM_CAPTION_LIMIT}, asking LLM to shorten to ~${target}…`);
+        const shortened = (await shortenForAlbumCaption(htmlText, target)).trim();
+        if (shortened && shortened.length <= ALBUM_CAPTION_LIMIT) {
+          captionText = shortened;
+          console.log(`Post #${postId}: shortened caption to ${shortened.length} chars`);
+        } else {
+          console.warn(`Post #${postId}: shortened caption still ${shortened.length} chars, falling back to no caption`);
+        }
+      } catch (err) {
+        console.error(`Post #${postId}: caption shortening failed, falling back to no caption:`, (err as Error).message);
+      }
+    }
 
     const sendAlbum = async (caption?: string) => {
       await client.sendFile(channelId, {
@@ -175,9 +198,9 @@ export async function publishPost(postId: number): Promise<void> {
     };
 
     let albumWithCaption = false;
-    if (captionFits) {
+    if (captionText) {
       try {
-        await sendAlbum(htmlText);
+        await sendAlbum(captionText);
         albumWithCaption = true;
       } catch (err: any) {
         if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {

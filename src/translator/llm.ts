@@ -105,3 +105,28 @@ export async function verifyTranslation(original: string, translated: string): P
   const prompt = `ОРИГІНАЛ:\n${original}\n\nПЕРЕКЛАД:\n${translated}`;
   return llmCall(VERIFY_PROMPT, prompt, 0.1);
 }
+
+// ——— Agent 3: Caption shortener (Telegram-only, original goes to site) ———
+
+const SHORTEN_PROMPT = `Ти — редактор. Скороти український Telegram-пост, щоб він поміщався у підпис до альбому Telegram.
+
+Дозволені HTML-теги GramJS: <b>, <strong>, <i>, <em>, <u>, <s>, <del>, <spoiler>, <code>, <pre>, <a href="...">, <blockquote>.
+
+Правила:
+- ЗБЕРЕЖИ головну думку, ключову інформацію, цифри, назви, посилання, заклик до дії
+- Текст має читатися як САМОСТІЙНИЙ змістовний пост, а не уривок
+- НЕ додавай "...", "детальніше нижче", "читайте далі" — текст має виглядати завершеним
+- НЕ перекладай, не міняй мову, стиль чи тон
+- Зберігай URL, @username, #хештеги, емодзі що несуть зміст
+- ЗБЕРЕЖИ HTML-розмітку валідною: кожен тег парний, не додавай нових тегів
+- Якщо в оригіналі немає HTML — у скороченому теж не додавай
+- Поверни ТІЛЬКИ скорочений текст без пояснень, преамбул чи коментарів`;
+
+/**
+ * Agent 3: Shorten an HTML post to fit a target character budget.
+ * Used ONLY for Telegram album caption — the full original is sent to the website.
+ */
+export async function shortenForAlbumCaption(htmlText: string, maxChars: number): Promise<string> {
+  const prompt = `Скороти цей пост до МАКСИМУМ ${maxChars} символів (рахуючи HTML-теги). Зберігай головну інформацію, цифри, посилання, тон. Текст має бути завершеним:\n\n${htmlText}`;
+  return llmCall(SHORTEN_PROMPT, prompt, 0.2);
+}
