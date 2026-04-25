@@ -346,18 +346,55 @@ async function uploadMediaFiles(mediaFiles: MediaFile[]): Promise<{ type: string
   return results;
 }
 
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function buildMediaHtml(uploadedMedia: { type: string; url: string; fileName: string; poster?: string }[]): string {
   if (uploadedMedia.length === 0) return "";
+
+  const photos = uploadedMedia.filter((m) => m.type === "photo");
+  const videos = uploadedMedia.filter((m) => m.type === "video" || m.type === "animation");
   const parts: string[] = [];
-  for (const m of uploadedMedia) {
-    if (m.type === "photo") {
-      parts.push(`<img src="${m.url}" alt="${m.fileName}" style="max-width:100%;height:auto;" />`);
-    } else if (m.type === "video" || m.type === "animation") {
-      const posterAttr = m.poster ? ` poster="${m.poster}"` : "";
-      parts.push(`<video src="${m.url}"${posterAttr} controls style="max-width:100%;height:auto;"></video>`);
-    }
+
+  // Photos: single image full-width; multiple — responsive grid (1:1 tiles, object-fit cover).
+  if (photos.length === 1) {
+    const m = photos[0];
+    parts.push(
+      `<figure style="margin:1.25em 0;">` +
+        `<img src="${escapeAttr(m.url)}" alt="${escapeAttr(m.fileName)}" loading="lazy" ` +
+        `style="display:block;width:100%;height:auto;border-radius:10px;" />` +
+      `</figure>`
+    );
+  } else if (photos.length > 1) {
+    // Layouts: 2 → 2 cols; 3 → 3 cols; 4 → 2x2; 5+ → 3 cols (multi-row)
+    const cols = photos.length === 2 ? 2 : photos.length === 4 ? 2 : 3;
+    const tiles = photos
+      .map(
+        (m) =>
+          `<img src="${escapeAttr(m.url)}" alt="${escapeAttr(m.fileName)}" loading="lazy" ` +
+          `style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;aspect-ratio:1/1;" />`
+      )
+      .join("");
+    parts.push(
+      `<div style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:8px;margin:1.25em 0;">` +
+        tiles +
+      `</div>`
+    );
   }
-  return parts.length > 0 ? `<div>${parts.join("")}</div>` : "";
+
+  // Videos: each on its own row, full-width with controls.
+  for (const m of videos) {
+    const posterAttr = m.poster ? ` poster="${escapeAttr(m.poster)}"` : "";
+    parts.push(
+      `<figure style="margin:1.25em 0;">` +
+        `<video src="${escapeAttr(m.url)}"${posterAttr} controls playsinline preload="metadata" ` +
+        `style="display:block;width:100%;height:auto;border-radius:10px;background:#000;"></video>` +
+      `</figure>`
+    );
+  }
+
+  return parts.join("");
 }
 
 // ——— Main publish flow ———
