@@ -135,7 +135,10 @@ export async function updatePostStatus(postId: number, status: Status) {
 export async function getPost(id: number) {
   return prisma.post.findUnique({
     where: { id },
-    include: { mediaFiles: true, channel: true },
+    include: {
+      mediaFiles: { orderBy: { id: "asc" } },
+      channel: true,
+    },
   });
 }
 

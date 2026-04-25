@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs";
 import { Api } from "telegram";
 import { config } from "../config.js";
 import { getPost, updatePostStatus } from "../db/repository.js";
@@ -7,6 +8,7 @@ import { getBotClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
 
 const MEDIA_DIR = path.resolve("media");
+const ALBUM_CAPTION_LIMIT = 1024;
 
 /**
  * Strip all HTML tags, leaving only plain text.
@@ -102,61 +104,96 @@ export async function publishPost(postId: number): Promise<void> {
   // Build buttons if VaibeCod URL is available
   const buttons = vaibeCodUrl ? buildVaibeCodButton(vaibeCodUrl) : undefined;
 
-  const mediaFiles = post.mediaFiles || [];
+  // Sort by id (insertion order from album) and drop entries whose file is missing on disk
+  const mediaFiles = (post.mediaFiles || [])
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .filter((m) => {
+      const exists = fs.existsSync(path.join(MEDIA_DIR, m.filePath));
+      if (!exists) {
+        console.warn(`Post #${postId}: media file missing on disk, skipping: ${m.filePath}`);
+      }
+      return exists;
+    });
+
+  const sendText = async () => {
+    await client.sendMessage(channelId, {
+      message: htmlText,
+      parseMode,
+      ...(buttons ? { buttons } : {}),
+    } as any);
+  };
+
+  // Plain-text-or-link helper: a tiny follow-up that carries the inline button
+  // (Telegram albums don't support inline buttons, so we attach them to a separate text message)
+  const sendButtonFollowup = async () => {
+    if (!buttons) return;
+    await client.sendMessage(channelId, {
+      message: "👇",
+      buttons,
+    } as any);
+  };
 
   if (mediaFiles.length === 0) {
-    // Text-only message
-    if (buttons) {
-      await client.sendMessage(channelId, {
-        message: htmlText,
+    await sendText();
+  } else if (mediaFiles.length === 1) {
+    // Single media: caption + button can both ride on the file
+    const media = mediaFiles[0];
+    const filePath = path.join(MEDIA_DIR, media.filePath);
+    try {
+      await client.sendFile(channelId, {
+        file: filePath,
+        caption: htmlText,
         parseMode,
-        buttons: buttons,
+        forceDocument: media.type === "document",
+        ...(buttons ? { buttons } : {}),
       } as any);
-    } else {
-      await client.sendMessage(channelId, { message: htmlText, parseMode });
-    }
-  } else {
-    // Try sending media with caption; if too long — fallback to media + separate text
-    const sendMedia = async (caption?: string, capParseMode?: "html", markup?: Api.KeyboardButtonUrl[][]) => {
-      if (mediaFiles.length === 1) {
-        const media = mediaFiles[0];
-        const filePath = path.join(MEDIA_DIR, media.filePath);
+    } catch (err: any) {
+      if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
+        // Caption too long — send media silently, then full text + button as follow-up
         await client.sendFile(channelId, {
           file: filePath,
-          caption,
-          parseMode: capParseMode,
           forceDocument: media.type === "document",
-          ...(markup ? { buttons: markup } : {}),
         } as any);
-      } else {
-        const files = mediaFiles.map((m) => path.join(MEDIA_DIR, m.filePath));
-        await client.sendFile(channelId, {
-          file: files,
-          caption,
-          parseMode: capParseMode,
-          ...(markup ? { buttons: markup } : {}),
-        } as any);
-      }
-    };
-
-    try {
-      await sendMedia(htmlText, parseMode, buttons);
-    } catch (err: any) {
-      if (err.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
-        // Caption too long — send media without caption, then text separately
-        await sendMedia();
-        if (buttons) {
-          await client.sendMessage(channelId, {
-            message: htmlText,
-            parseMode,
-            buttons: buttons,
-          } as any);
-        } else {
-          await client.sendMessage(channelId, { message: htmlText, parseMode });
-        }
+        await sendText();
       } else {
         throw err;
       }
+    }
+  } else {
+    // Album: Telegram limits caption to 1024 chars on the first item and does NOT support inline buttons.
+    // Strategy: if caption fits, attach it to the album, then post the button as a tiny follow-up.
+    //          if caption is too long, send the album without caption and post full text+button after.
+    const files = mediaFiles.map((m) => path.join(MEDIA_DIR, m.filePath));
+    const captionFits = htmlText.length <= ALBUM_CAPTION_LIMIT;
+
+    const sendAlbum = async (caption?: string) => {
+      await client.sendFile(channelId, {
+        file: files,
+        ...(caption ? { caption, parseMode } : {}),
+      } as any);
+    };
+
+    let albumWithCaption = false;
+    if (captionFits) {
+      try {
+        await sendAlbum(htmlText);
+        albumWithCaption = true;
+      } catch (err: any) {
+        if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
+          await sendAlbum();
+          await sendText();
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      await sendAlbum();
+      await sendText();
+    }
+
+    if (albumWithCaption) {
+      await sendButtonFollowup();
     }
   }
 
