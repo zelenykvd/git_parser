@@ -17,6 +17,7 @@ export default function PostDetail() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [actionLoading, setActionLoading] = useState<"approve" | "reject" | "publish" | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"original" | "translation">("original");
 
@@ -37,13 +38,14 @@ export default function PostDetail() {
   }
 
   async function handleAction(action: "approve" | "reject" | "publish") {
-    setError("");
+    setError(""); setActionLoading(action);
     try {
       if (action === "approve") await approvePost(post.id);
       else if (action === "reject") await rejectPost(post.id);
       else await publishPost(post.id);
       setPost(await fetchPost(post.id));
     } catch (err: any) { setError(err.message); }
+    finally { setActionLoading(null); }
   }
 
   async function handleDelete() {
@@ -200,24 +202,34 @@ export default function PostDetail() {
         </div>
       )}
 
+      {actionLoading === "publish" && (
+        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm px-3 py-2 border border-blue-200 mt-4">
+          <Icon name="progress_activity" size={16} className="animate-spin" />
+          Публікую — переклад, завантаження медіа на сайт, відправка в Telegram. Не закривайте сторінку (до 30с).
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-2 mt-4 flex-wrap">
         {post.status === "PENDING" && (
           <>
-            <button onClick={() => handleAction("approve")}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors">
-              <Icon name="check" size={18} /> Схвалити
+            <button onClick={() => handleAction("approve")} disabled={actionLoading !== null}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+              <Icon name={actionLoading === "approve" ? "progress_activity" : "check"} size={18} className={actionLoading === "approve" ? "animate-spin" : ""} />
+              {actionLoading === "approve" ? "Схвалення..." : "Схвалити"}
             </button>
-            <button onClick={() => handleAction("reject")}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors">
-              <Icon name="close" size={18} /> Відхилити
+            <button onClick={() => handleAction("reject")} disabled={actionLoading !== null}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+              <Icon name={actionLoading === "reject" ? "progress_activity" : "close"} size={18} className={actionLoading === "reject" ? "animate-spin" : ""} />
+              {actionLoading === "reject" ? "Відхилення..." : "Відхилити"}
             </button>
           </>
         )}
         {post.status === "APPROVED" && (
-          <button onClick={() => handleAction("publish")}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-            <Icon name="send" size={18} /> Опублікувати
+          <button onClick={() => handleAction("publish")} disabled={actionLoading !== null}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+            <Icon name={actionLoading === "publish" ? "progress_activity" : "send"} size={18} className={actionLoading === "publish" ? "animate-spin" : ""} />
+            {actionLoading === "publish" ? "Публікація..." : "Опублікувати"}
           </button>
         )}
         {post.status !== "PENDING" && (
