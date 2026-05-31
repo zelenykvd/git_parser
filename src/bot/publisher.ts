@@ -125,16 +125,6 @@ export async function publishPost(postId: number): Promise<void> {
     } as any);
   };
 
-  // Plain-text-or-link helper: a tiny follow-up that carries the inline button
-  // (Telegram albums don't support inline buttons, so we attach them to a separate text message)
-  const sendButtonFollowup = async () => {
-    if (!buttons) return;
-    await client.sendMessage(channelId, {
-      message: "👇",
-      buttons,
-    } as any);
-  };
-
   if (mediaFiles.length === 0) {
     await sendText();
   } else if (mediaFiles.length === 1) {
@@ -197,26 +187,29 @@ export async function publishPost(postId: number): Promise<void> {
       } as any);
     };
 
-    let albumWithCaption = false;
+    // Telegram albums don't support inline buttons, so album posts carry NO
+    // "Читати на сайті" button — that would force a separate message. The text
+    // rides as the album caption so the whole thing stays a single post. Only
+    // if the caption is rejected as too long do we fall back to a text-only
+    // follow-up (also without a button, to keep album posts button-free).
+    const sendCaptionOverflowText = async () => {
+      await client.sendMessage(channelId, { message: htmlText, parseMode } as any);
+    };
+
     if (captionText) {
       try {
         await sendAlbum(captionText);
-        albumWithCaption = true;
       } catch (err: any) {
         if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
           await sendAlbum();
-          await sendText();
+          await sendCaptionOverflowText();
         } else {
           throw err;
         }
       }
     } else {
       await sendAlbum();
-      await sendText();
-    }
-
-    if (albumWithCaption) {
-      await sendButtonFollowup();
+      await sendCaptionOverflowText();
     }
   }
 
