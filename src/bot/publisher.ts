@@ -161,19 +161,27 @@ export async function publishPost(postId: number): Promise<void> {
     const files = mediaFiles.map((m) => path.join(MEDIA_DIR, m.filePath));
     let captionText: string | undefined = undefined;
 
-    if (htmlText.length <= ALBUM_CAPTION_LIMIT) {
+    // Telegram's 1024-char caption limit counts the VISIBLE text (after HTML
+    // entities are parsed) — tag characters and <a href="…"> URLs do NOT count.
+    // Measuring the raw HTML string over-counts (especially once bare URLs are
+    // auto-linked above) and wrongly splits posts that would fit as a single
+    // album caption. Measure the visible text instead.
+    const captionLength = (s: string) =>
+      parseMode === "html" ? stripHtmlTags(s).length : s.length;
+
+    if (captionLength(htmlText) <= ALBUM_CAPTION_LIMIT) {
       captionText = htmlText;
     } else if (parseMode === "html") {
       // Leave a small safety margin so the LLM is not penalised for going slightly over.
       const target = ALBUM_CAPTION_LIMIT - 24;
       try {
-        console.log(`Post #${postId}: caption ${htmlText.length} > ${ALBUM_CAPTION_LIMIT}, asking LLM to shorten to ~${target}…`);
+        console.log(`Post #${postId}: caption ${captionLength(htmlText)} > ${ALBUM_CAPTION_LIMIT} visible chars, asking LLM to shorten to ~${target}…`);
         const shortened = (await shortenForAlbumCaption(htmlText, target)).trim();
-        if (shortened && shortened.length <= ALBUM_CAPTION_LIMIT) {
+        if (shortened && captionLength(shortened) <= ALBUM_CAPTION_LIMIT) {
           captionText = shortened;
-          console.log(`Post #${postId}: shortened caption to ${shortened.length} chars`);
+          console.log(`Post #${postId}: shortened caption to ${captionLength(shortened)} visible chars`);
         } else {
-          console.warn(`Post #${postId}: shortened caption still ${shortened.length} chars, falling back to no caption`);
+          console.warn(`Post #${postId}: shortened caption still ${captionLength(shortened)} visible chars, falling back to no caption`);
         }
       } catch (err) {
         console.error(`Post #${postId}: caption shortening failed, falling back to no caption:`, (err as Error).message);
