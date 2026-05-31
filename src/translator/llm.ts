@@ -1,15 +1,29 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 
-const primaryClient = new OpenAI({
-  apiKey: config.llm.apiKey,
-  baseURL: config.llm.baseUrl,
-});
+type LlmEndpoint = { label: string; client: OpenAI; model: string };
 
-const fallbackClient = new OpenAI({
-  apiKey: config.llm.apiKey,
-  baseURL: config.llm.fallbackBaseUrl,
-});
+const endpoints: LlmEndpoint[] = [
+  {
+    label: config.llm.baseUrl,
+    client: new OpenAI({ apiKey: config.llm.apiKey, baseURL: config.llm.baseUrl }),
+    model: config.llm.model,
+  },
+  {
+    label: config.llm.fallbackBaseUrl,
+    client: new OpenAI({ apiKey: config.llm.apiKey, baseURL: config.llm.fallbackBaseUrl }),
+    model: config.llm.model,
+  },
+];
+
+// OpenRouter — final fallback, used only when all VoidAI endpoints fail.
+if (config.llm.openRouterApiKey) {
+  endpoints.push({
+    label: `OpenRouter (${config.llm.openRouterModel})`,
+    client: new OpenAI({ apiKey: config.llm.openRouterApiKey, baseURL: config.llm.openRouterBaseUrl }),
+    model: config.llm.openRouterModel,
+  });
+}
 
 // ——— Agent 1: Translator ———
 
@@ -43,10 +57,12 @@ const TRANSLATE_PROMPT = `Ти — професійний перекладач. 
 - Поверни ТІЛЬКИ перекладений текст без пояснень`;
 
 export async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
-  for (const client of [primaryClient, fallbackClient]) {
+  for (let i = 0; i < endpoints.length; i++) {
+    const endpoint = endpoints[i];
+    const isLast = i === endpoints.length - 1;
     try {
-      const response = await client.chat.completions.create({
-        model: config.llm.model,
+      const response = await endpoint.client.chat.completions.create({
+        model: endpoint.model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -56,13 +72,13 @@ export async function llmCall(system: string, user: string, temperature = 0.3): 
 
       const result = response.choices[0]?.message?.content?.trim();
       if (!result) throw new Error("Empty LLM response");
-      if (client === fallbackClient) {
-        console.log(`[LLM] Primary URL failed, using fallback: ${config.llm.fallbackBaseUrl}`);
+      if (i > 0) {
+        console.log(`[LLM] Served by fallback endpoint: ${endpoint.label}`);
       }
       return result;
     } catch (err) {
-      if (client === fallbackClient) throw err;
-      console.warn(`[LLM] Primary URL failed (${config.llm.baseUrl}), trying fallback...`, (err as Error).message);
+      if (isLast) throw err;
+      console.warn(`[LLM] Endpoint failed (${endpoint.label}), trying next...`, (err as Error).message);
     }
   }
   throw new Error("All LLM endpoints failed");

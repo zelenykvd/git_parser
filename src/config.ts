@@ -53,6 +53,9 @@ export const config = {
     baseUrl: process.env.LLM_BASE_URL || "https://api.voidai.app/v1",
     fallbackBaseUrl: process.env.LLM_FALLBACK_BASE_URL || "https://beta.voidai.app/v1",
     model: process.env.LLM_MODEL || "gpt-5.1",
+    openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
+    openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free",
   },
   database: {
     url: required("DATABASE_URL"),
