@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { Api } from "telegram";
 import { config } from "../config.js";
 import { getPost, updatePostStatus } from "../db/repository.js";
-import { entitiesToTelegramHtml, stripMarkdownArtifacts } from "../parser/formatter.js";
+import { stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getBotClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
 import { shortenForAlbumCaption } from "../translator/llm.js";
@@ -59,6 +59,14 @@ export async function publishPost(postId: number): Promise<void> {
   const post = await getPost(postId);
   if (!post) throw new Error(`Post #${postId} not found`);
   if (post.status !== "APPROVED") throw new Error(`Post #${postId} is not approved`);
+  // Untranslated posts must never reach the channel — fail loudly instead of
+  // silently falling back to the original-language text.
+  const translated = post.translatedText?.trim();
+  if (!translated) {
+    throw new Error(
+      `Post #${postId} has no translation — untranslated posts are not published`
+    );
+  }
 
   const client = await getBotClient();
   const channelId = post.channel.targetChannelId || config.telegram.targetChannelId;
@@ -70,24 +78,16 @@ export async function publishPost(postId: number): Promise<void> {
   let htmlText: string;
   let parseMode: "html" | undefined = "html";
 
-  if (post.translatedText) {
-    if (isBrokenHtml(post.translatedText)) {
-      // Old broken translation — strip everything, send as plain text
-      console.warn(`Post #${postId}: broken HTML detected, sending as plain text`);
-      htmlText = stripHtmlTags(stripMarkdownArtifacts(post.translatedText));
-      parseMode = undefined;
-    } else {
-      // Auto-link plain URLs not already inside <a> tags
-      htmlText = post.translatedText.replace(
-        /(?<!href="|">)(https?:\/\/[^\s<]+)/g,
-        '<a href="$1">$1</a>'
-      );
-    }
+  if (isBrokenHtml(translated)) {
+    // Old broken translation — strip everything, send as plain text
+    console.warn(`Post #${postId}: broken HTML detected, sending as plain text`);
+    htmlText = stripHtmlTags(stripMarkdownArtifacts(translated));
+    parseMode = undefined;
   } else {
-    // No translation — convert from entities
-    htmlText = entitiesToTelegramHtml(
-      stripMarkdownArtifacts(post.originalText),
-      (post.entities as any[]) || []
+    // Auto-link plain URLs not already inside <a> tags
+    htmlText = translated.replace(
+      /(?<!href="|">)(https?:\/\/[^\s<]+)/g,
+      '<a href="$1">$1</a>'
     );
   }
 
