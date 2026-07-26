@@ -1,10 +1,9 @@
 import * as path from "path";
 import * as fs from "fs";
-import { Api } from "telegram";
 import { config } from "../config.js";
 import { getPost, updatePostStatus } from "../db/repository.js";
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
-import { getBotClient } from "../parser/client.js";
+import { getTelegramClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
 import { shortenForAlbumCaption } from "../translator/llm.js";
 
@@ -39,22 +38,6 @@ function isBrokenHtml(text: string): boolean {
   return false;
 }
 
-/**
- * Build a buttons array for GramJS sendMessage/sendFile.
- * GramJS expects Button[][] format for the buttons parameter.
- */
-function buildVaibeCodButton(vaibeCodUrl: string): Api.KeyboardButtonUrl[][] {
-  const fullUrl = `https://www.vaibecod.com${vaibeCodUrl}?utm_source=telegram&utm_medium=post&utm_campaign=channel`;
-  return [
-    [
-      new Api.KeyboardButtonUrl({
-        text: "Читати на сайті",
-        url: fullUrl,
-      }),
-    ],
-  ];
-}
-
 export async function publishPost(postId: number): Promise<void> {
   const post = await getPost(postId);
   if (!post) throw new Error(`Post #${postId} not found`);
@@ -68,7 +51,7 @@ export async function publishPost(postId: number): Promise<void> {
     );
   }
 
-  const client = await getBotClient();
+  const client = await getTelegramClient();
   const channelId = post.channel.targetChannelId || config.telegram.targetChannelId;
   if (!channelId) {
     throw new Error(`No target channel configured for source @${post.channel.username}`);
@@ -99,11 +82,8 @@ export async function publishPost(postId: number): Promise<void> {
       htmlText
     );
   } catch (err) {
-    console.error(`[VaibeCod] Failed for post #${postId}, publishing to Telegram without button:`, (err as Error).message);
+    console.error(`[VaibeCod] Failed for post #${postId}, publishing to Telegram anyway:`, (err as Error).message);
   }
-
-  // Build buttons if VaibeCod URL is available
-  const buttons = vaibeCodUrl ? buildVaibeCodButton(vaibeCodUrl) : undefined;
 
   // Sort by id (insertion order from album) and drop entries whose file is missing on disk
   const mediaFiles = (post.mediaFiles || [])
@@ -121,7 +101,6 @@ export async function publishPost(postId: number): Promise<void> {
     await client.sendMessage(channelId, {
       message: htmlText,
       parseMode,
-      ...(buttons ? { buttons } : {}),
     } as any);
   };
 
@@ -137,7 +116,6 @@ export async function publishPost(postId: number): Promise<void> {
         caption: htmlText,
         parseMode,
         forceDocument: media.type === "document",
-        ...(buttons ? { buttons } : {}),
       } as any);
     } catch (err: any) {
       if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
@@ -152,7 +130,7 @@ export async function publishPost(postId: number): Promise<void> {
       }
     }
   } else {
-    // Album: Telegram limits caption to 1024 chars on the first item and does NOT support inline buttons.
+    // Album: Telegram limits the caption to 1024 chars on the first item.
     // VaibeCod (site) already received the FULL original htmlText above — shortening here is Telegram-only.
     // Strategy:
     //   1. If full text fits — use it as caption.
@@ -195,11 +173,9 @@ export async function publishPost(postId: number): Promise<void> {
       } as any);
     };
 
-    // Telegram albums don't support inline buttons, so album posts carry NO
-    // "Читати на сайті" button — that would force a separate message. The text
-    // rides as the album caption so the whole thing stays a single post. Only
-    // if the caption is rejected as too long do we fall back to a text-only
-    // follow-up (also without a button, to keep album posts button-free).
+    // The text rides as the album caption so the whole thing stays a single
+    // post. Only if the caption is rejected as too long do we fall back to a
+    // text-only follow-up message.
     const sendCaptionOverflowText = async () => {
       await client.sendMessage(channelId, { message: htmlText, parseMode } as any);
     };
