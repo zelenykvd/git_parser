@@ -37,6 +37,9 @@ export async function main() {
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "linkedinUrl" TEXT`
     );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "telegramUrl" TEXT`
+    );
   } catch (err) {
     console.error("Failed to ensure LinkedIn columns exist:", (err as Error).message);
   }

@@ -5,6 +5,7 @@ import {
   getPost,
   updatePostStatus,
   claimPostForPublishing,
+  updatePostTelegramUrl,
 } from "../db/repository.js";
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getTelegramClient } from "../parser/client.js";
@@ -111,6 +112,16 @@ export async function publishPost(postId: number): Promise<void> {
   await publishClaimedPost(postId);
 }
 
+/**
+ * Public t.me link for a sent message. Only @username channels have one —
+ * private/numeric channels return null.
+ */
+export function buildTelegramUrl(channelId: string, msgId: number): string | null {
+  const handle = channelId.trim().replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "");
+  if (!/^[A-Za-z][A-Za-z0-9_]{3,}$/.test(handle)) return null;
+  return `https://t.me/${handle}/${msgId}`;
+}
+
 async function doPublish(postId: number, markSent: () => void): Promise<void> {
   const post = await getPost(postId);
   if (!post) throw new Error(`Post #${postId} not found`);
@@ -167,11 +178,22 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
       return exists;
     });
 
+  // Remember the id of the FIRST message sent — that is the one the public
+  // t.me link should point at.
+  let firstMsgId: number | undefined;
+  const remember = (sent: any) => {
+    const msg = Array.isArray(sent) ? sent[0] : sent;
+    const id = msg?.id;
+    if (firstMsgId === undefined && typeof id === "number") firstMsgId = id;
+  };
+
   const sendText = async () => {
-    await client.sendMessage(channelId, {
-      message: htmlText,
-      parseMode,
-    } as any);
+    remember(
+      await client.sendMessage(channelId, {
+        message: htmlText,
+        parseMode,
+      } as any)
+    );
     markSent();
   };
 
@@ -182,20 +204,24 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
     const media = mediaFiles[0];
     const filePath = path.join(MEDIA_DIR, media.filePath);
     try {
-      await client.sendFile(channelId, {
-        file: filePath,
-        caption: htmlText,
-        parseMode,
-        forceDocument: media.type === "document",
-      } as any);
+      remember(
+        await client.sendFile(channelId, {
+          file: filePath,
+          caption: htmlText,
+          parseMode,
+          forceDocument: media.type === "document",
+        } as any)
+      );
       markSent();
     } catch (err: any) {
       if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
         // Caption too long — send media silently, then full text as follow-up
-        await client.sendFile(channelId, {
-          file: filePath,
-          forceDocument: media.type === "document",
-        } as any);
+        remember(
+          await client.sendFile(channelId, {
+            file: filePath,
+            forceDocument: media.type === "document",
+          } as any)
+        );
         markSent();
         await sendText();
       } else {
@@ -240,10 +266,12 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
     }
 
     const sendAlbum = async (caption?: string) => {
-      await client.sendFile(channelId, {
-        file: files,
-        ...(caption ? { caption, parseMode } : {}),
-      } as any);
+      remember(
+        await client.sendFile(channelId, {
+          file: files,
+          ...(caption ? { caption, parseMode } : {}),
+        } as any)
+      );
       markSent();
     };
 
@@ -271,12 +299,23 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
     }
   }
 
+  // Public link to the message we just posted, when the target is a @username
+  // channel (numeric-id channels have no public t.me link).
+  const telegramUrl =
+    firstMsgId !== undefined ? buildTelegramUrl(channelId, firstMsgId) : null;
+  if (telegramUrl) {
+    await updatePostTelegramUrl(postId, telegramUrl).catch((err) =>
+      console.warn(`Post #${postId}: failed to save telegram url:`, err.message)
+    );
+  }
+
   // Cross-post to LinkedIn after Telegram succeeded — never fails the publish
   try {
     await publishPostToLinkedIn(
       { id: post.id, linkedinPostId: post.linkedinPostId, mediaFiles: post.mediaFiles },
       htmlText,
-      vaibeCodUrl ?? post.vaibeCodUrl
+      vaibeCodUrl ?? post.vaibeCodUrl,
+      telegramUrl
     );
   } catch (err) {
     console.error(`[LinkedIn] Failed for post #${postId}:`, (err as Error).message);

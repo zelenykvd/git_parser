@@ -132,6 +132,13 @@ export async function updatePostStatus(postId: number, status: Status) {
   });
 }
 
+export async function updatePostTelegramUrl(postId: number, telegramUrl: string) {
+  return prisma.post.update({
+    where: { id: postId },
+    data: { telegramUrl },
+  });
+}
+
 export async function updatePostLinkedIn(postId: number, linkedinPostId: string, linkedinUrl: string) {
   return prisma.post.update({
     where: { id: postId },

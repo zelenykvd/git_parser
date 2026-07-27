@@ -12,6 +12,8 @@ const API = "https://api.linkedin.com";
 // LinkedIn commentary hard limit is 3000 chars — keep a margin for the article link
 const COMMENTARY_LIMIT = 2950;
 const MAX_IMAGES = 9;
+// LinkedIn transcodes uploaded video asynchronously
+const VIDEO_PROCESSING_TIMEOUT_MS = 180_000;
 
 export const LINKEDIN_TOKEN_KEY = "linkedin.accessToken";
 export const LINKEDIN_URN_KEY = "linkedin.personUrn";
@@ -124,10 +126,11 @@ interface MediaFile {
   filePath: string;
 }
 
-async function uploadImage(
+async function uploadAsset(
   token: string,
   personUrn: string,
-  filePath: string
+  filePath: string,
+  kind: "image" | "video"
 ): Promise<string> {
   const registerRes = await fetch(`${API}/v2/assets?action=registerUpload`, {
     method: "POST",
@@ -138,7 +141,7 @@ async function uploadImage(
     },
     body: JSON.stringify({
       registerUploadRequest: {
-        recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+        recipes: [`urn:li:digitalmediaRecipe:feedshare-${kind}`],
         owner: personUrn,
         serviceRelationships: [
           { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
@@ -164,9 +167,34 @@ async function uploadImage(
     body: binary,
   });
   if (!putRes.ok) {
-    throw new Error(`image upload failed: ${putRes.status} ${(await putRes.text()).slice(0, 200)}`);
+    throw new Error(`${kind} upload failed: ${putRes.status} ${(await putRes.text()).slice(0, 200)}`);
   }
   return asset;
+}
+
+/**
+ * Videos are transcoded asynchronously — sharing an asset that is still
+ * PROCESSING produces a post with a broken player, so wait for it.
+ */
+async function waitForAsset(token: string, asset: string, timeoutMs: number): Promise<boolean> {
+  const id = asset.split(":").pop();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const res = await fetch(`${API}/v2/assets/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as any;
+      const statuses = Object.values(data.recipes || {}).map((r: any) => r?.status);
+      if (statuses.includes("AVAILABLE")) return true;
+      if (statuses.includes("CLIENT_ERROR") || statuses.includes("SERVER_ERROR")) return false;
+    } catch {
+      // transient — keep polling until the deadline
+    }
+  }
+  return false;
 }
 
 // ——— Publish ———
@@ -179,7 +207,8 @@ async function uploadImage(
 export async function publishPostToLinkedIn(
   post: { id: number; linkedinPostId: string | null; mediaFiles?: MediaFile[] },
   htmlText: string,
-  articleUrl: string | null
+  articleUrl: string | null,
+  telegramUrl?: string | null
 ): Promise<string | null> {
   if (post.linkedinPostId) return post.linkedinPostId; // already shared
 
@@ -188,27 +217,55 @@ export async function publishPostToLinkedIn(
   if (!token || !personUrn) return null; // not connected
   if ((await getEncryptedSetting(LINKEDIN_ENABLED_KEY)) === "false") return null;
 
+  // Links are appended after the body, so the body gets whatever room is left
+  const links: string[] = [];
+  if (articleUrl) links.push(`🔗 Повна версія: https://www.vaibecod.com${articleUrl}`);
+  if (telegramUrl) links.push(`📣 Telegram: ${telegramUrl}`);
+  const suffix = links.length > 0 ? `\n\n${links.join("\n")}` : "";
+
   let text = htmlToLinkedInText(htmlText);
-  if (text.length > COMMENTARY_LIMIT) {
-    text = text.slice(0, COMMENTARY_LIMIT - 1).replace(/\s+\S*$/, "") + "…";
+  const room = COMMENTARY_LIMIT - suffix.length;
+  if (text.length > room) {
+    text = text.slice(0, room - 1).replace(/\s+\S*$/, "") + "…";
   }
-  if (articleUrl) {
-    text += `\n\nПовна версія: https://www.vaibecod.com${articleUrl}`;
+  text += suffix;
+
+  // LinkedIn allows either one video or up to 9 images in a share — not both.
+  const media = post.mediaFiles || [];
+  const video = media.find((m) => m.type === "video" || m.type === "animation");
+  const assets: string[] = [];
+  let category: "NONE" | "IMAGE" | "VIDEO" = "NONE";
+
+  if (video) {
+    const localPath = path.join(MEDIA_DIR, video.filePath);
+    if (fs.existsSync(localPath)) {
+      try {
+        const asset = await uploadAsset(token, personUrn, localPath, "video");
+        console.log(`[LinkedIn] Post #${post.id}: video uploaded, waiting for transcoding…`);
+        if (await waitForAsset(token, asset, VIDEO_PROCESSING_TIMEOUT_MS)) {
+          assets.push(asset);
+          category = "VIDEO";
+        } else {
+          console.warn(`[LinkedIn] Post #${post.id}: video not ready in time, posting without it`);
+        }
+      } catch (err) {
+        console.warn(`[LinkedIn] Video upload failed for post #${post.id}:`, (err as Error).message);
+      }
+    }
   }
 
-  // Upload photos (videos need a different, partner-gated API — skipped)
-  const photos = (post.mediaFiles || [])
-    .filter((m) => m.type === "photo")
-    .slice(0, MAX_IMAGES);
-  const assets: string[] = [];
-  for (const m of photos) {
-    const localPath = path.join(MEDIA_DIR, m.filePath);
-    if (!fs.existsSync(localPath)) continue;
-    try {
-      assets.push(await uploadImage(token, personUrn, localPath));
-    } catch (err) {
-      console.warn(`[LinkedIn] Image upload failed for post #${post.id}:`, (err as Error).message);
+  if (category === "NONE") {
+    const photos = media.filter((m) => m.type === "photo").slice(0, MAX_IMAGES);
+    for (const m of photos) {
+      const localPath = path.join(MEDIA_DIR, m.filePath);
+      if (!fs.existsSync(localPath)) continue;
+      try {
+        assets.push(await uploadAsset(token, personUrn, localPath, "image"));
+      } catch (err) {
+        console.warn(`[LinkedIn] Image upload failed for post #${post.id}:`, (err as Error).message);
+      }
     }
+    if (assets.length > 0) category = "IMAGE";
   }
 
   const body = {
@@ -217,7 +274,7 @@ export async function publishPostToLinkedIn(
     specificContent: {
       "com.linkedin.ugc.ShareContent": {
         shareCommentary: { text },
-        shareMediaCategory: assets.length > 0 ? "IMAGE" : "NONE",
+        shareMediaCategory: category,
         ...(assets.length > 0
           ? { media: assets.map((a) => ({ status: "READY", media: a })) }
           : {}),

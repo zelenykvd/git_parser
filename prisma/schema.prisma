@@ -38,6 +38,7 @@ model Post {
   vaibeCodUrlEn  String?
   linkedinPostId String?
   linkedinUrl    String?
+  telegramUrl    String?
 
   @@unique([channelId, telegramMsgId])
 }
