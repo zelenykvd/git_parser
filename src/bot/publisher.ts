@@ -1,7 +1,11 @@
 import * as path from "path";
 import * as fs from "fs";
 import { config } from "../config.js";
-import { getPost, updatePostStatus } from "../db/repository.js";
+import {
+  getPost,
+  updatePostStatus,
+  claimPostForPublishing,
+} from "../db/repository.js";
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getTelegramClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
@@ -38,12 +42,77 @@ function isBrokenHtml(text: string): boolean {
   return false;
 }
 
-export async function publishPost(postId: number): Promise<void> {
+/**
+ * Validate a post and atomically claim it for publishing (APPROVED → PUBLISHING).
+ * Throws if the post cannot be published. After a successful claim no other
+ * caller can claim the same post, which makes publishing idempotent even when
+ * the HTTP request is retried or the button is clicked twice.
+ */
+export async function claimPost(postId: number): Promise<void> {
   const post = await getPost(postId);
   if (!post) throw new Error(`Post #${postId} not found`);
-  if (post.status !== "APPROVED") throw new Error(`Post #${postId} is not approved`);
+  if (post.status === "PUBLISHING") {
+    throw new Error(`Post #${postId} is already being published`);
+  }
+  if (post.status === "PUBLISHED") {
+    throw new Error(`Post #${postId} is already published`);
+  }
+  if (post.status !== "APPROVED") {
+    throw new Error(`Post #${postId} is not approved`);
+  }
   // Untranslated posts must never reach the channel — fail loudly instead of
   // silently falling back to the original-language text.
+  if (!post.translatedText?.trim()) {
+    throw new Error(
+      `Post #${postId} has no translation — untranslated posts are not published`
+    );
+  }
+
+  const claimed = await claimPostForPublishing(postId);
+  if (!claimed) {
+    throw new Error(`Post #${postId} is already being published`);
+  }
+}
+
+/**
+ * Publish a post that was already claimed via claimPost(). On failure before
+ * anything reached the Telegram channel the post is returned to APPROVED so it
+ * can be retried; once a message has been sent the post is always marked
+ * PUBLISHED to prevent duplicates.
+ */
+export async function publishClaimedPost(postId: number): Promise<void> {
+  let sentToTelegram = false;
+  try {
+    await doPublish(postId, () => { sentToTelegram = true; });
+    await updatePostStatus(postId, "PUBLISHED");
+    console.log(`Post #${postId} published`);
+  } catch (err) {
+    if (sentToTelegram) {
+      // Something failed AFTER the post reached the channel (e.g. the
+      // caption-overflow follow-up). Mark as PUBLISHED anyway — retrying
+      // would duplicate the post in the channel.
+      console.error(
+        `Post #${postId}: error after Telegram send, marking PUBLISHED to avoid duplicates:`,
+        (err as Error).message
+      );
+      await updatePostStatus(postId, "PUBLISHED");
+    } else {
+      console.error(`Post #${postId}: publish failed, reverting to APPROVED:`, (err as Error).message);
+      await updatePostStatus(postId, "APPROVED");
+      throw err;
+    }
+  }
+}
+
+/** Claim + publish in one call (CLI / non-HTTP usage). */
+export async function publishPost(postId: number): Promise<void> {
+  await claimPost(postId);
+  await publishClaimedPost(postId);
+}
+
+async function doPublish(postId: number, markSent: () => void): Promise<void> {
+  const post = await getPost(postId);
+  if (!post) throw new Error(`Post #${postId} not found`);
   const translated = post.translatedText?.trim();
   if (!translated) {
     throw new Error(
@@ -102,12 +171,13 @@ export async function publishPost(postId: number): Promise<void> {
       message: htmlText,
       parseMode,
     } as any);
+    markSent();
   };
 
   if (mediaFiles.length === 0) {
     await sendText();
   } else if (mediaFiles.length === 1) {
-    // Single media: caption + button can both ride on the file
+    // Single media: text rides as the file caption
     const media = mediaFiles[0];
     const filePath = path.join(MEDIA_DIR, media.filePath);
     try {
@@ -117,13 +187,15 @@ export async function publishPost(postId: number): Promise<void> {
         parseMode,
         forceDocument: media.type === "document",
       } as any);
+      markSent();
     } catch (err: any) {
       if (err?.message?.includes("MEDIA_CAPTION_TOO_LONG")) {
-        // Caption too long — send media silently, then full text + button as follow-up
+        // Caption too long — send media silently, then full text as follow-up
         await client.sendFile(channelId, {
           file: filePath,
           forceDocument: media.type === "document",
         } as any);
+        markSent();
         await sendText();
       } else {
         throw err;
@@ -171,6 +243,7 @@ export async function publishPost(postId: number): Promise<void> {
         file: files,
         ...(caption ? { caption, parseMode } : {}),
       } as any);
+      markSent();
     };
 
     // The text rides as the album caption so the whole thing stays a single
@@ -197,6 +270,5 @@ export async function publishPost(postId: number): Promise<void> {
     }
   }
 
-  await updatePostStatus(postId, "PUBLISHED");
-  console.log(`Post #${postId} published to channel ${channelId}${vaibeCodUrl ? ` + VaibeCod` : ""}`);
+  console.log(`Post #${postId} sent to channel ${channelId}${vaibeCodUrl ? ` + VaibeCod` : ""}`);
 }

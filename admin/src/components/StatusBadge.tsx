@@ -3,6 +3,7 @@ import Icon from "./Icon";
 const config: Record<string, { bg: string; text: string; icon: string }> = {
   PENDING: { bg: "bg-amber-50", text: "text-amber-700", icon: "schedule" },
   APPROVED: { bg: "bg-emerald-50", text: "text-emerald-700", icon: "check_circle" },
+  PUBLISHING: { bg: "bg-violet-50", text: "text-violet-700", icon: "sync" },
   REJECTED: { bg: "bg-red-50", text: "text-red-700", icon: "cancel" },
   PUBLISHED: { bg: "bg-blue-50", text: "text-blue-700", icon: "public" },
 };
@@ -10,6 +11,7 @@ const config: Record<string, { bg: string; text: string; icon: string }> = {
 const labels: Record<string, string> = {
   PENDING: "Очікує",
   APPROVED: "Схвалено",
+  PUBLISHING: "Публікується",
   REJECTED: "Відхилено",
   PUBLISHED: "Опубліковано",
 };

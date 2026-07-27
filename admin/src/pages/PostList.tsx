@@ -3,9 +3,9 @@ import { fetchPosts } from "../api";
 import PostCard from "../components/PostCard";
 import Icon from "../components/Icon";
 
-const STATUSES = ["", "PENDING", "APPROVED", "REJECTED", "PUBLISHED"];
-const STATUS_LABELS: Record<string, string> = { "": "Всі", PENDING: "Очікують", APPROVED: "Схвалені", REJECTED: "Відхилені", PUBLISHED: "Опубліковані" };
-const STATUS_ICONS: Record<string, string> = { "": "list", PENDING: "schedule", APPROVED: "check_circle", REJECTED: "cancel", PUBLISHED: "public" };
+const STATUSES = ["", "PENDING", "APPROVED", "PUBLISHING", "REJECTED", "PUBLISHED"];
+const STATUS_LABELS: Record<string, string> = { "": "Всі", PENDING: "Очікують", APPROVED: "Схвалені", PUBLISHING: "Публікуються", REJECTED: "Відхилені", PUBLISHED: "Опубліковані" };
+const STATUS_ICONS: Record<string, string> = { "": "list", PENDING: "schedule", APPROVED: "check_circle", PUBLISHING: "sync", REJECTED: "cancel", PUBLISHED: "public" };
 
 export default function PostList() {
   const [posts, setPosts] = useState<any[]>([]);

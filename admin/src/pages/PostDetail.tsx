@@ -25,6 +25,24 @@ export default function PostDetail() {
     fetchPost(Number(id)).then((p) => { setPost(p); setEditedText(p.translatedText || ""); }).catch(console.error);
   }, [id]);
 
+  // Publishing runs in the background on the server — poll until it finishes.
+  const isPublishing = post?.status === "PUBLISHING";
+  useEffect(() => {
+    if (!isPublishing) return;
+    const timer = setInterval(async () => {
+      try {
+        const p = await fetchPost(Number(id));
+        if (p.status !== "PUBLISHING") {
+          setPost(p);
+          if (p.status === "APPROVED") {
+            setError("Публікація не вдалася — пост повернуто в «Схвалені». Спробуйте ще раз (деталі в логах сервера).");
+          }
+        }
+      } catch { /* transient network error — keep polling */ }
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [isPublishing, id]);
+
   if (!post) return (
     <div className="flex items-center justify-center py-20">
       <Icon name="progress_activity" size={24} className="animate-spin text-neutral-300" />
@@ -202,10 +220,10 @@ export default function PostDetail() {
         </div>
       )}
 
-      {actionLoading === "publish" && (
+      {(actionLoading === "publish" || post.status === "PUBLISHING") && (
         <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-sm px-3 py-2 border border-blue-200 mt-4">
           <Icon name="progress_activity" size={16} className="animate-spin" />
-          Публікую — переклад, завантаження медіа на сайт, відправка в Telegram. Не закривайте сторінку (до 30с).
+          Публікую в фоні — переклад, завантаження медіа на сайт, відправка в Telegram. Сторінку можна закрити.
         </div>
       )}
 
@@ -232,16 +250,18 @@ export default function PostDetail() {
             {actionLoading === "publish" ? "Публікація..." : "Опублікувати"}
           </button>
         )}
-        {post.status !== "PENDING" && (
+        {post.status !== "PENDING" && post.status !== "PUBLISHING" && (
           <button onClick={handleReset}
             className="flex items-center justify-center gap-1 px-4 py-2.5 text-sm border border-neutral-200 text-neutral-600 hover:border-neutral-300 transition-colors">
             <Icon name="restart_alt" size={18} /> Скинути
           </button>
         )}
-        <button onClick={handleDelete}
-          className="flex items-center justify-center gap-1 px-4 py-2.5 text-sm text-red-500 border border-red-200 hover:bg-red-50 transition-colors sm:ml-auto">
-          <Icon name="delete" size={18} /> Видалити
-        </button>
+        {post.status !== "PUBLISHING" && (
+          <button onClick={handleDelete}
+            className="flex items-center justify-center gap-1 px-4 py-2.5 text-sm text-red-500 border border-red-200 hover:bg-red-50 transition-colors sm:ml-auto">
+            <Icon name="delete" size={18} /> Видалити
+          </button>
+        )}
       </div>
     </div>
   );

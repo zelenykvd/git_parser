@@ -27,7 +27,7 @@ import {
   getEncryptedSetting,
   deleteSetting,
 } from "../db/repository.js";
-import { publishPost } from "../bot/publisher.js";
+import { claimPost, publishClaimedPost } from "../bot/publisher.js";
 import {
   getTelegramClient,
   BOT_TOKEN_KEY,
@@ -165,12 +165,22 @@ router.post("/api/posts/:id/reject", async (req: Request, res: Response) => {
 });
 
 router.post("/api/posts/:id/publish", async (req: Request, res: Response) => {
+  const postId = Number(req.params.id);
   try {
-    await publishPost(Number(req.params.id));
-    res.json({ success: true });
+    // Atomic claim: a second request (double click, proxy retry) gets 409
+    // instead of sending the post to Telegram twice.
+    await claimPost(postId);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(409).json({ error: err.message });
   }
+
+  // Respond immediately — publishing takes long (media uploads + LLM calls)
+  // and would otherwise hit proxy timeouts. The admin polls the post status.
+  res.status(202).json({ success: true, status: "PUBLISHING" });
+
+  publishClaimedPost(postId).catch((err) => {
+    console.error(`Background publish failed for post #${postId}:`, err.message);
+  });
 });
 
 router.post("/api/posts/:id/reset", async (req: Request, res: Response) => {

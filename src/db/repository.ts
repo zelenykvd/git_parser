@@ -132,6 +132,31 @@ export async function updatePostStatus(postId: number, status: Status) {
   });
 }
 
+/**
+ * Atomically claim a post for publishing: APPROVED → PUBLISHING.
+ * Returns false if the post is not in APPROVED state (already publishing,
+ * already published, or not approved) — the caller must not publish it.
+ */
+export async function claimPostForPublishing(postId: number): Promise<boolean> {
+  const res = await prisma.post.updateMany({
+    where: { id: postId, status: Status.APPROVED },
+    data: { status: Status.PUBLISHING },
+  });
+  return res.count === 1;
+}
+
+/**
+ * Recover posts stuck in PUBLISHING after a crash/restart — return them to
+ * APPROVED so they can be re-published manually.
+ */
+export async function releaseStalePublishing(): Promise<number> {
+  const res = await prisma.post.updateMany({
+    where: { status: Status.PUBLISHING },
+    data: { status: Status.APPROVED },
+  });
+  return res.count;
+}
+
 export async function getPost(id: number) {
   return prisma.post.findUnique({
     where: { id },

@@ -2,7 +2,7 @@ import { config } from "./config.js";
 import { startServer } from "./server/app.js";
 import { startListener } from "./parser/listener.js";
 import { startPoller } from "./parser/poller.js";
-import { prisma } from "./db/repository.js";
+import { prisma, releaseStalePublishing } from "./db/repository.js";
 import { syncPublishedToVaibeCod } from "./bot/vaibecod.js";
 import { repairMissingMedia } from "./media/repair.js";
 
@@ -17,6 +17,16 @@ export async function main() {
     console.error("Failed to connect to database. Is Docker running?");
     console.error("Run: docker compose up -d");
     process.exit(1);
+  }
+
+  // Posts stuck in PUBLISHING after a crash/redeploy go back to APPROVED
+  try {
+    const released = await releaseStalePublishing();
+    if (released > 0) {
+      console.log(`Released ${released} post(s) stuck in PUBLISHING state`);
+    }
+  } catch (err) {
+    console.error("Failed to release stale PUBLISHING posts:", (err as Error).message);
   }
 
   // Start Express API server
