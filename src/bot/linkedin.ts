@@ -6,6 +6,7 @@ import {
   deleteSetting,
   updatePostLinkedIn,
 } from "../db/repository.js";
+import { translateToEnglish } from "./vaibecod.js";
 
 const MEDIA_DIR = path.resolve("media");
 const API = "https://api.linkedin.com";
@@ -208,7 +209,8 @@ export async function publishPostToLinkedIn(
   post: { id: number; linkedinPostId: string | null; mediaFiles?: MediaFile[] },
   htmlText: string,
   articleUrl: string | null,
-  telegramUrl?: string | null
+  telegramUrl?: string | null,
+  englishHtml?: string | null
 ): Promise<string | null> {
   if (post.linkedinPostId) return post.linkedinPostId; // already shared
 
@@ -217,13 +219,28 @@ export async function publishPostToLinkedIn(
   if (!token || !personUrn) return null; // not connected
   if ((await getEncryptedSetting(LINKEDIN_ENABLED_KEY)) === "false") return null;
 
+  // LinkedIn audience is English-speaking. Reuse the translation the site
+  // already produced; only translate again when it is unavailable.
+  let bodyHtml = englishHtml?.trim() || "";
+  if (!bodyHtml) {
+    try {
+      bodyHtml = (await translateToEnglish(htmlText)).trim();
+    } catch (err) {
+      console.warn(
+        `[LinkedIn] English translation failed for post #${post.id}, posting original:`,
+        (err as Error).message
+      );
+      bodyHtml = htmlText;
+    }
+  }
+
   // Links are appended after the body, so the body gets whatever room is left
   const links: string[] = [];
-  if (articleUrl) links.push(`🔗 Повна версія: https://www.vaibecod.com${articleUrl}`);
+  if (articleUrl) links.push(`🔗 Full version: https://www.vaibecod.com${articleUrl}`);
   if (telegramUrl) links.push(`📣 Telegram: ${telegramUrl}`);
   const suffix = links.length > 0 ? `\n\n${links.join("\n")}` : "";
 
-  let text = htmlToLinkedInText(htmlText);
+  let text = htmlToLinkedInText(bodyHtml);
   const room = COMMENTARY_LIMIT - suffix.length;
   if (text.length > room) {
     text = text.slice(0, room - 1).replace(/\s+\S*$/, "") + "…";

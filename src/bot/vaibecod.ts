@@ -399,12 +399,28 @@ function buildMediaHtml(uploadedMedia: { type: string; url: string; fileName: st
 
 // ——— Main publish flow ———
 
+export interface VaibeCodResult {
+  url: string | null;
+  urlEn: string | null;
+  /** English translation produced for the site — reused for LinkedIn */
+  englishContent: string | null;
+}
+
 export async function publishPostToVaibeCod(
-  post: { id: number; publishedAt: Date | null; vaibeCodUrl: string | null; mediaFiles?: MediaFile[] },
+  post: {
+    id: number;
+    publishedAt: Date | null;
+    vaibeCodUrl: string | null;
+    vaibeCodUrlEn?: string | null;
+    mediaFiles?: MediaFile[];
+  },
   htmlText: string
-): Promise<string | null> {
-  if (!config.vaibeCod.apiKey) return null;
-  if (post.vaibeCodUrl) return post.vaibeCodUrl; // already published
+): Promise<VaibeCodResult> {
+  if (!config.vaibeCod.apiKey) return { url: null, urlEn: null, englishContent: null };
+  if (post.vaibeCodUrl) {
+    // already published
+    return { url: post.vaibeCodUrl, urlEn: post.vaibeCodUrlEn || null, englishContent: null };
+  }
 
   const publishedAt = post.publishedAt?.toISOString() || new Date().toISOString();
   const media = post.mediaFiles || [];
@@ -465,7 +481,11 @@ export async function publishPostToVaibeCod(
   );
   console.log(`[VaibeCod] Post #${post.id} published: UK=${ukPost?.url}, EN=${enPost?.url}`);
 
-  return ukPost?.url || result.posts[0]?.url || null;
+  return {
+    url: ukPost?.url || result.posts[0]?.url || null,
+    urlEn: enPost?.url || null,
+    englishContent,
+  };
 }
 
 // ——— Sync already published posts ———

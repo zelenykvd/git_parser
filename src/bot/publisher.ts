@@ -9,7 +9,7 @@ import {
 } from "../db/repository.js";
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getTelegramClient } from "../parser/client.js";
-import { publishPostToVaibeCod } from "./vaibecod.js";
+import { publishPostToVaibeCod, VaibeCodResult } from "./vaibecod.js";
 import { publishPostToLinkedIn } from "./linkedin.js";
 import { shortenForAlbumCaption } from "../translator/llm.js";
 
@@ -156,15 +156,22 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
   }
 
   // Publish to VaibeCod (uk + en versions with SEO)
-  let vaibeCodUrl: string | null = null;
+  let vaibeCod: VaibeCodResult = { url: null, urlEn: null, englishContent: null };
   try {
-    vaibeCodUrl = await publishPostToVaibeCod(
-      { id: post.id, publishedAt: post.publishedAt, vaibeCodUrl: post.vaibeCodUrl, mediaFiles: post.mediaFiles },
+    vaibeCod = await publishPostToVaibeCod(
+      {
+        id: post.id,
+        publishedAt: post.publishedAt,
+        vaibeCodUrl: post.vaibeCodUrl,
+        vaibeCodUrlEn: post.vaibeCodUrlEn,
+        mediaFiles: post.mediaFiles,
+      },
       htmlText
     );
   } catch (err) {
     console.error(`[VaibeCod] Failed for post #${postId}, publishing to Telegram anyway:`, (err as Error).message);
   }
+  const vaibeCodUrl = vaibeCod.url;
 
   // Sort by id (insertion order from album) and drop entries whose file is missing on disk
   const mediaFiles = (post.mediaFiles || [])
@@ -314,8 +321,10 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
     await publishPostToLinkedIn(
       { id: post.id, linkedinPostId: post.linkedinPostId, mediaFiles: post.mediaFiles },
       htmlText,
-      vaibeCodUrl ?? post.vaibeCodUrl,
-      telegramUrl
+      // English post → English article
+      vaibeCod.urlEn ?? post.vaibeCodUrlEn ?? vaibeCodUrl ?? post.vaibeCodUrl,
+      telegramUrl,
+      vaibeCod.englishContent
     );
   } catch (err) {
     console.error(`[LinkedIn] Failed for post #${postId}:`, (err as Error).message);
