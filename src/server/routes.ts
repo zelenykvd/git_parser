@@ -35,6 +35,7 @@ import {
   setLinkedInEnabled,
 } from "../bot/linkedin.js";
 import { buildResearchBrief, suggestTopics } from "../research/brief.js";
+import { runResearchTeam } from "../research/agents.js";
 import {
   getTelegramClient,
   BOT_TOKEN_KEY,
@@ -695,6 +696,21 @@ router.get("/api/research/topics", async (req: Request, res: Response) => {
   try {
     const min = Number(req.query.min) || 4;
     res.json(await suggestTopics(min));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/research/run", async (req: Request, res: Response) => {
+  const topic = String(req.body?.topic || req.query.topic || "").trim();
+  if (topic.length < 3) return res.status(400).json({ error: "Вкажіть тему" });
+  try {
+    // Seed the team with whatever the archive already knows
+    const archive = await buildResearchBrief(topic).catch(() => null);
+    const context = archive?.sources.length
+      ? archive.sources.map((s) => `[#${s.postId}] ${s.date}: ${s.excerpt}`).join("\n")
+      : "";
+    res.json(await runResearchTeam(topic, context));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

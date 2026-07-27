@@ -57,6 +57,11 @@ export const config = {
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free",
   },
+  searxng: {
+    url: (process.env.SEARXNG_URL || "").replace(/\/+$/, ""),
+    user: process.env.SEARXNG_USER || "",
+    pass: process.env.SEARXNG_PASS || "",
+  },
   database: {
     url: required("DATABASE_URL"),
   },

@@ -248,7 +248,14 @@ function getMimeType(fileName: string, mimeType?: string | null): string {
 }
 
 async function uploadToVaibeCod(filePath: string, fileName: string, mimeType?: string | null): Promise<string> {
-  const fileBuffer = fs.readFileSync(filePath);
+  return uploadBufferToVaibeCod(fs.readFileSync(filePath), fileName, mimeType);
+}
+
+export async function uploadBufferToVaibeCod(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType?: string | null
+): Promise<string> {
   const resolvedMime = getMimeType(fileName, mimeType);
 
   // Build multipart/form-data manually to ensure correct Content-Type
