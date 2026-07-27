@@ -64,12 +64,16 @@ function hostOf(url: string): string {
   }
 }
 
-export function classifyImage(imageUrl: string): LicenceTier {
+export function classifyImage(imageUrl: string, pageUrl = ""): LicenceTier {
   const host = hostOf(imageUrl);
   if (!host) return "unknown";
   if (FREE_DOMAINS.some((d) => host === d || host.endsWith("." + d))) return "free";
   if (PROJECT_DOMAINS.some((d) => host === d || host.endsWith("." + d))) return "project";
   if (DOCS_HINTS.some((h) => imageUrl.includes(h))) return "docs";
+  // An illustration served by the very site we are citing belongs to that site,
+  // whatever CDN path it sits behind — that is the same standing as its docs.
+  const pageHost = hostOf(pageUrl);
+  if (pageHost && (host === pageHost || host.endsWith("." + pageHost))) return "docs";
   return "unknown";
 }
 
@@ -169,7 +173,7 @@ export async function harvestPageImages(
   for (const img of found) {
     if (results.filter((r) => r.hostedUrl).length >= MAX_PER_PAGE) break;
 
-    const tier = classifyImage(img.url);
+    const tier = classifyImage(img.url, pageUrl);
     const base: HarvestedImage = {
       sourceUrl: img.url,
       sourcePage: pageUrl,
