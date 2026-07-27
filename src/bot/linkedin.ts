@@ -7,6 +7,7 @@ import {
   updatePostLinkedIn,
 } from "../db/repository.js";
 import { translateToEnglish } from "./vaibecod.js";
+import { htmlToPlainText } from "../lib/html.js";
 
 const MEDIA_DIR = path.resolve("media");
 const API = "https://api.linkedin.com";
@@ -98,26 +99,8 @@ export async function setLinkedInEnabled(enabled: boolean): Promise<void> {
   await setEncryptedSetting(LINKEDIN_ENABLED_KEY, enabled ? "true" : "false");
 }
 
-// ——— Text conversion ———
 
-/**
- * Telegram-flavoured HTML → plain text for a LinkedIn post: tags are dropped,
- * paragraph structure is kept as newlines.
- */
-export function htmlToLinkedInText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+
 
 // ——— Media upload (legacy assets API, works with w_member_social) ———
 
@@ -240,7 +223,7 @@ export async function publishPostToLinkedIn(
   if (telegramUrl) links.push(`📣 Telegram: ${telegramUrl}`);
   const suffix = links.length > 0 ? `\n\n${links.join("\n")}` : "";
 
-  let text = htmlToLinkedInText(bodyHtml);
+  let text = htmlToPlainText(bodyHtml);
   const room = COMMENTARY_LIMIT - suffix.length;
   if (text.length > room) {
     text = text.slice(0, room - 1).replace(/\s+\S*$/, "") + "…";

@@ -8,6 +8,7 @@ import {
   updatePostTelegramUrl,
 } from "../db/repository.js";
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
+import { stripHtml } from "../lib/html.js";
 import { getTelegramClient } from "../parser/client.js";
 import { publishPostToVaibeCod, VaibeCodResult } from "./vaibecod.js";
 import { publishPostToLinkedIn } from "./linkedin.js";
@@ -15,17 +16,6 @@ import { shortenForAlbumCaption } from "../translator/llm.js";
 
 const MEDIA_DIR = path.resolve("media");
 const ALBUM_CAPTION_LIMIT = 1024;
-
-/**
- * Strip all HTML tags, leaving only plain text.
- */
-function stripHtmlTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
 
 /**
  * Detect old broken translations where HTML tags and markdown markers are mixed
@@ -145,7 +135,7 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
   if (isBrokenHtml(translated)) {
     // Old broken translation — strip everything, send as plain text
     console.warn(`Post #${postId}: broken HTML detected, sending as plain text`);
-    htmlText = stripHtmlTags(stripMarkdownArtifacts(translated));
+    htmlText = stripHtml(stripMarkdownArtifacts(translated));
     parseMode = undefined;
   } else {
     // Auto-link plain URLs not already inside <a> tags
@@ -251,7 +241,7 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
     // auto-linked above) and wrongly splits posts that would fit as a single
     // album caption. Measure the visible text instead.
     const captionLength = (s: string) =>
-      parseMode === "html" ? stripHtmlTags(s).length : s.length;
+      parseMode === "html" ? stripHtml(s).length : s.length;
 
     if (captionLength(htmlText) <= ALBUM_CAPTION_LIMIT) {
       captionText = htmlText;

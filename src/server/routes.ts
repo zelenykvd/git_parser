@@ -34,6 +34,7 @@ import {
   disconnectLinkedIn,
   setLinkedInEnabled,
 } from "../bot/linkedin.js";
+import { buildResearchBrief, suggestTopics } from "../research/brief.js";
 import {
   getTelegramClient,
   BOT_TOKEN_KEY,
@@ -685,6 +686,26 @@ router.delete("/api/settings/bot-token", async (_req: Request, res: Response) =>
     res.json({ configured: false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ——— Research briefs from the archive ———
+
+router.get("/api/research/topics", async (req: Request, res: Response) => {
+  try {
+    const min = Number(req.query.min) || 4;
+    res.json(await suggestTopics(min));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/api/research/brief", async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || "");
+    res.json(await buildResearchBrief(q));
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });
 
