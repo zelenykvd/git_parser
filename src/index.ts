@@ -19,6 +19,16 @@ export async function main() {
     process.exit(1);
   }
 
+  // Ensure the PUBLISHING enum value exists even if migrations were not run
+  // on this deployment (idempotent, safe to run on every start).
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TYPE "Status" ADD VALUE IF NOT EXISTS 'PUBLISHING'`
+    );
+  } catch (err) {
+    console.error("Failed to ensure PUBLISHING status exists:", (err as Error).message);
+  }
+
   // Posts stuck in PUBLISHING after a crash/redeploy go back to APPROVED
   try {
     const released = await releaseStalePublishing();
