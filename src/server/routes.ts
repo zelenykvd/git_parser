@@ -29,6 +29,12 @@ import {
 } from "../db/repository.js";
 import { claimPost, publishClaimedPost } from "../bot/publisher.js";
 import {
+  getLinkedInStatus,
+  connectLinkedIn,
+  disconnectLinkedIn,
+  setLinkedInEnabled,
+} from "../bot/linkedin.js";
+import {
   getTelegramClient,
   BOT_TOKEN_KEY,
   verifyBotToken,
@@ -677,6 +683,53 @@ router.delete("/api/settings/bot-token", async (_req: Request, res: Response) =>
     await deleteSetting(BOT_TOKEN_KEY);
     await disconnectBotClient();
     res.json({ configured: false });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ——— Settings: LinkedIn cross-posting (token encrypted at rest) ———
+
+router.get("/api/settings/linkedin", async (_req: Request, res: Response) => {
+  try {
+    res.json(await getLinkedInStatus());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/settings/linkedin", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    if (typeof token !== "string" || !token.trim()) {
+      return res.status(400).json({ error: "Token is required" });
+    }
+    // Verify with LinkedIn before persisting
+    let profile;
+    try {
+      profile = await connectLinkedIn(token.trim());
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
+    res.json({ connected: true, enabled: true, name: profile.name || undefined });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/settings/linkedin/enabled", async (req: Request, res: Response) => {
+  try {
+    await setLinkedInEnabled(req.body?.enabled !== false);
+    res.json(await getLinkedInStatus());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/api/settings/linkedin", async (_req: Request, res: Response) => {
+  try {
+    await disconnectLinkedIn();
+    res.json({ connected: false, enabled: false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

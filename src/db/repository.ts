@@ -132,6 +132,13 @@ export async function updatePostStatus(postId: number, status: Status) {
   });
 }
 
+export async function updatePostLinkedIn(postId: number, linkedinPostId: string, linkedinUrl: string) {
+  return prisma.post.update({
+    where: { id: postId },
+    data: { linkedinPostId, linkedinUrl },
+  });
+}
+
 /**
  * Atomically claim a post for publishing: APPROVED → PUBLISHING.
  * Returns false if the post is not in APPROVED state (already publishing,

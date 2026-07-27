@@ -206,3 +206,32 @@ export function saveBotToken(token: string): Promise<BotTokenStatus> {
 export function deleteBotToken(): Promise<BotTokenStatus> {
   return request("/settings/bot-token", { method: "DELETE" });
 }
+
+export interface LinkedInStatus {
+  connected: boolean;
+  enabled: boolean;
+  name?: string;
+  connectedAt?: string;
+}
+
+export function fetchLinkedInStatus(): Promise<LinkedInStatus> {
+  return request("/settings/linkedin");
+}
+
+export function saveLinkedInToken(token: string): Promise<LinkedInStatus> {
+  return request("/settings/linkedin", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function setLinkedInEnabled(enabled: boolean): Promise<LinkedInStatus> {
+  return request("/settings/linkedin/enabled", {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function deleteLinkedIn(): Promise<LinkedInStatus> {
+  return request("/settings/linkedin", { method: "DELETE" });
+}

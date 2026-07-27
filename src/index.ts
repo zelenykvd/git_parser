@@ -29,6 +29,18 @@ export async function main() {
     console.error("Failed to ensure PUBLISHING status exists:", (err as Error).message);
   }
 
+  // Same insurance for LinkedIn columns (idempotent)
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "linkedinPostId" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "linkedinUrl" TEXT`
+    );
+  } catch (err) {
+    console.error("Failed to ensure LinkedIn columns exist:", (err as Error).message);
+  }
+
   // Posts stuck in PUBLISHING after a crash/redeploy go back to APPROVED
   try {
     const released = await releaseStalePublishing();

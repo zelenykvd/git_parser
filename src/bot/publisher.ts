@@ -9,6 +9,7 @@ import {
 import { stripMarkdownArtifacts } from "../parser/formatter.js";
 import { getTelegramClient } from "../parser/client.js";
 import { publishPostToVaibeCod } from "./vaibecod.js";
+import { publishPostToLinkedIn } from "./linkedin.js";
 import { shortenForAlbumCaption } from "../translator/llm.js";
 
 const MEDIA_DIR = path.resolve("media");
@@ -268,6 +269,17 @@ async function doPublish(postId: number, markSent: () => void): Promise<void> {
       await sendAlbum();
       await sendCaptionOverflowText();
     }
+  }
+
+  // Cross-post to LinkedIn after Telegram succeeded — never fails the publish
+  try {
+    await publishPostToLinkedIn(
+      { id: post.id, linkedinPostId: post.linkedinPostId, mediaFiles: post.mediaFiles },
+      htmlText,
+      vaibeCodUrl ?? post.vaibeCodUrl
+    );
+  } catch (err) {
+    console.error(`[LinkedIn] Failed for post #${postId}:`, (err as Error).message);
   }
 
   console.log(`Post #${postId} sent to channel ${channelId}${vaibeCodUrl ? ` + VaibeCod` : ""}`);

@@ -121,6 +121,10 @@ export default function PostDetail() {
             )}
           </span>
         )}
+        {post.linkedinUrl && (
+          <a href={post.linkedinUrl} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-sky-700 hover:underline">LinkedIn ↗</a>
+        )}
       </div>
 
       {error && (
