@@ -5,6 +5,7 @@ import PostDetail from "./pages/PostDetail";
 import Channels from "./pages/Channels";
 import ChannelDetail from "./pages/ChannelDetail";
 import Settings from "./pages/Settings";
+import Research from "./pages/Research";
 import Login from "./pages/Login";
 import { isLoggedIn, clearToken } from "./auth";
 import Icon from "./components/Icon";
@@ -44,6 +45,9 @@ function NavBar() {
               <NavLink to="/channels" className={linkClass}>
                 <Icon name="rss_feed" size={18} /> Канали
               </NavLink>
+              <NavLink to="/research" className={linkClass}>
+                <Icon name="travel_explore" size={18} /> Дослідження
+              </NavLink>
               <NavLink to="/settings" className={linkClass}>
                 <Icon name="settings" size={18} /> Налаштування
               </NavLink>
@@ -69,6 +73,9 @@ function NavBar() {
           </NavLink>
           <NavLink to="/channels" className={mobileLinkClass} onClick={handleNavClick}>
             <Icon name="rss_feed" size={20} /> Канали
+          </NavLink>
+          <NavLink to="/research" className={mobileLinkClass} onClick={handleNavClick}>
+            <Icon name="travel_explore" size={20} /> Дослідження
           </NavLink>
           <NavLink to="/settings" className={mobileLinkClass} onClick={handleNavClick}>
             <Icon name="settings" size={20} /> Налаштування
@@ -99,6 +106,7 @@ export default function App() {
                   <Route path="/posts/:id" element={<PostDetail />} />
                   <Route path="/channels" element={<Channels />} />
                   <Route path="/channels/:id" element={<ChannelDetail />} />
+                  <Route path="/research" element={<Research />} />
                   <Route path="/settings" element={<Settings />} />
                 </Routes>
               </main>

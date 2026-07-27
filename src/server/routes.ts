@@ -701,19 +701,52 @@ router.get("/api/research/topics", async (req: Request, res: Response) => {
   }
 });
 
+// A research run takes minutes, far longer than any proxy will hold a request
+// open, so it runs in the background and the admin polls it.
+interface ResearchTask {
+  topic: string;
+  startedAt: number;
+  done: boolean;
+  error?: string;
+  result?: Awaited<ReturnType<typeof runResearchTeam>>;
+}
+const researchTasks = new Map<string, ResearchTask>();
+
 router.post("/api/research/run", async (req: Request, res: Response) => {
   const topic = String(req.body?.topic || req.query.topic || "").trim();
   if (topic.length < 3) return res.status(400).json({ error: "Вкажіть тему" });
-  try {
-    // Seed the team with whatever the archive already knows
-    const archive = await buildResearchBrief(topic).catch(() => null);
-    const context = archive?.sources.length
-      ? archive.sources.map((s) => `[#${s.postId}] ${s.date}: ${s.excerpt}`).join("\n")
-      : "";
-    res.json(await runResearchTeam(topic, context));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+
+  const taskId = crypto.randomUUID();
+  researchTasks.set(taskId, { topic, startedAt: Date.now(), done: false });
+  res.status(202).json({ taskId, topic });
+
+  (async () => {
+    try {
+      // Seed the team with whatever the archive already knows
+      const archive = await buildResearchBrief(topic).catch(() => null);
+      const context = archive?.sources.length
+        ? archive.sources.map((s) => `[#${s.postId}] ${s.date}: ${s.excerpt}`).join("\n")
+        : "";
+      const result = await runResearchTeam(topic, context);
+      researchTasks.set(taskId, { topic, startedAt: Date.now(), done: true, result });
+    } catch (err: any) {
+      researchTasks.set(taskId, { topic, startedAt: Date.now(), done: true, error: err.message });
+    }
+    // Keep finished runs around for a while so a reloaded page can still read them
+    setTimeout(() => researchTasks.delete(taskId), 60 * 60 * 1000).unref?.();
+  })();
+});
+
+router.get("/api/research/run/:taskId", (req: Request, res: Response) => {
+  const task = researchTasks.get(String(req.params.taskId));
+  if (!task) return res.status(404).json({ error: "Задачу не знайдено" });
+  res.json({
+    topic: task.topic,
+    done: task.done,
+    elapsedMs: Date.now() - task.startedAt,
+    error: task.error,
+    result: task.result,
+  });
 });
 
 router.get("/api/research/brief", async (req: Request, res: Response) => {

@@ -207,6 +207,54 @@ export function deleteBotToken(): Promise<BotTokenStatus> {
   return request("/settings/bot-token", { method: "DELETE" });
 }
 
+// Research
+export interface ResearchFact {
+  claim: string;
+  quote: string;
+  url: string;
+  confirmations: number;
+}
+export interface ResearchImage {
+  sourceUrl: string;
+  sourcePage: string;
+  alt: string;
+  tier: string;
+  hostedUrl: string | null;
+  attribution: string;
+  skippedReason?: string;
+}
+export interface ResearchResult {
+  topic: string;
+  rounds: number;
+  facts: ResearchFact[];
+  rejected: { claim: string; url: string; reason: string }[];
+  openQuestions: string[];
+  sources: string[];
+  images: ResearchImage[];
+  brief: string;
+  transcript: { agent: string; message: string }[];
+}
+
+export function startResearch(topic: string): Promise<{ taskId: string; topic: string }> {
+  return request("/research/run", { method: "POST", body: JSON.stringify({ topic }) });
+}
+
+export function pollResearch(taskId: string): Promise<{
+  topic: string;
+  done: boolean;
+  elapsedMs: number;
+  error?: string;
+  result?: ResearchResult;
+}> {
+  return request(`/research/run/${taskId}`);
+}
+
+export function fetchTopicSuggestions(): Promise<
+  { term: string; mentions: number; firstSeen: string; lastSeen: string }[]
+> {
+  return request("/research/topics");
+}
+
 export interface LinkedInStatus {
   connected: boolean;
   enabled: boolean;
