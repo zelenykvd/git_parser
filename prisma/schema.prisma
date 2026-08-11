@@ -8,37 +8,39 @@ datasource db {
 }
 
 model Channel {
-  id                Int      @id @default(autoincrement())
-  username          String?  @unique
-  telegramId        String?  @unique
-  title             String?
-  active            Boolean  @default(true)
-  targetChannelId   String?
-  lastCheckedMsgId  Int?
-  posts             Post[]
-  createdAt         DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  username         String?  @unique
+  telegramId       String?  @unique
+  title            String?
+  active           Boolean  @default(true)
+  targetChannelId  String?
+  lastCheckedMsgId Int?
+  posts            Post[]
+  createdAt        DateTime @default(now())
 }
 
 model Post {
-  id             Int       @id @default(autoincrement())
-  channelId      Int
-  channel        Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  telegramMsgId  Int
-  originalText   String
-  translatedText String?
-  entities       Json?
-  mediaFiles     Media[]
-  isHistorical   Boolean   @default(false)
-  status         Status    @default(PENDING)
-  createdAt      DateTime  @default(now())
-  publishedAt    DateTime?
-  vaibeCodId     String?
-  vaibeCodUrl    String?
-  vaibeCodIdEn   String?
-  vaibeCodUrlEn  String?
-  linkedinPostId String?
-  linkedinUrl    String?
-  telegramUrl    String?
+  id               Int       @id @default(autoincrement())
+  channelId        Int
+  channel          Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  telegramMsgId    Int
+  originalText     String
+  translatedText   String?
+  // Provider/model that produced the translation, e.g. "voidai/gpt-5.1"
+  translationModel String?
+  entities         Json?
+  mediaFiles       Media[]
+  isHistorical     Boolean   @default(false)
+  status           Status    @default(PENDING)
+  createdAt        DateTime  @default(now())
+  publishedAt      DateTime?
+  vaibeCodId       String?
+  vaibeCodUrl      String?
+  vaibeCodIdEn     String?
+  vaibeCodUrlEn    String?
+  linkedinPostId   String?
+  linkedinUrl      String?
+  telegramUrl      String?
 
   @@unique([channelId, telegramMsgId])
 }

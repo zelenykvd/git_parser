@@ -175,7 +175,7 @@ docker compose logs -f   # Логи
 ### Схема
 
 - **Channel** — відстежувані канали (username, active, targetChannelId)
-- **Post** — пости (originalText, translatedText, entities, status, isHistorical)
+- **Post** — пости (originalText, translatedText, translationModel, entities, status, isHistorical)
 - **Media** — медіафайли (type, filePath, mimeType), каскадне видалення з постом
 - **Subscription** — кешований список каналів/груп з Telegram
 

@@ -238,8 +238,8 @@ router.post("/api/posts/:id/translate", async (req: Request, res: Response) => {
       (post.entities as any[]) || []
     );
     const translated = await translateText(html);
-    const verified = await verifyTranslation(html, translated);
-    const updated = await updatePostTranslatedText(post.id, verified);
+    const verified = await verifyTranslation(html, translated.text);
+    const updated = await updatePostTranslatedText(post.id, verified.text, translated.model);
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

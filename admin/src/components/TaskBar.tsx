@@ -34,9 +34,9 @@ export default function TaskBar() {
   if (visible.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-fadeIn">
+    <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
       <div className="max-w-7xl mx-auto px-3 sm:px-6">
-        <div className="space-y-1.5 pb-3">
+        <div className="space-y-2 pb-4">
           {visible.map((t) => (
             <TaskItem
               key={t.channelId}
@@ -60,32 +60,28 @@ function TaskItem({ task: t, onCancel, onDismiss }: { task: Task; onCancel: () =
   const progressPct = isCollecting ? 0 : Math.round((t.saved / total) * 100);
 
   return (
-    <div className="bg-white border border-neutral-200 shadow-lg overflow-hidden">
+    <div className="glass pointer-events-auto border border-line rounded-2xl shadow-pop overflow-hidden animate-slideUp">
       {/* Progress bar */}
-      <div className="h-0.5 bg-neutral-100">
+      <div className="h-1 bg-line">
         {isCollecting ? (
-          <div className="h-full bg-blue-500 animate-pulse w-full" />
+          <div className="h-full barber w-full" />
         ) : (
-          <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+          <div className="h-full brand-gradient transition-[width] duration-500 ease-tg" style={{ width: `${progressPct}%` }} />
         )}
       </div>
 
-      <div className="flex items-center gap-3 px-3 py-2">
+      <div className="flex items-center gap-3 px-3.5 py-2.5">
         {/* Icon */}
-        <div className="shrink-0">
-          {isCollecting ? (
-            <Icon name="cloud_download" size={18} className="text-blue-600" />
-          ) : (
-            <Icon name="save" size={18} className="text-blue-600" />
-          )}
-        </div>
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-soft text-brand shrink-0">
+          <Icon name={isCollecting ? "cloud_download" : "save"} size={18} />
+        </span>
 
         {/* Info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">{t.channelLabel}</span>
+            <span className="text-sm font-semibold truncate">{t.channelLabel}</span>
           </div>
-          <div className="text-xs text-neutral-400 tabular-nums">
+          <div className="text-xs text-muted tabular-nums">
             {isCollecting ? (
               <span>Збір повідомлень... {t.fetched}</span>
             ) : (
@@ -97,7 +93,8 @@ function TaskItem({ task: t, onCancel, onDismiss }: { task: Task; onCancel: () =
         {/* Cancel */}
         <button
           onClick={onCancel}
-          className="shrink-0 p-1.5 text-neutral-400 hover:text-red-500 transition-colors"
+          title="Скасувати"
+          className="press shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-muted hover:text-danger hover:bg-danger-soft"
         >
           <Icon name="close" size={18} />
         </button>

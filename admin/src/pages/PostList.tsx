@@ -7,6 +7,22 @@ const STATUSES = ["", "PENDING", "APPROVED", "PUBLISHING", "REJECTED", "PUBLISHE
 const STATUS_LABELS: Record<string, string> = { "": "Всі", PENDING: "Очікують", APPROVED: "Схвалені", PUBLISHING: "Публікуються", REJECTED: "Відхилені", PUBLISHED: "Опубліковані" };
 const STATUS_ICONS: Record<string, string> = { "": "list", PENDING: "schedule", APPROVED: "check_circle", PUBLISHING: "sync", REJECTED: "cancel", PUBLISHED: "public" };
 
+function PostSkeleton() {
+  return (
+    <div className="bg-card border border-line rounded-card shadow-card overflow-hidden">
+      <div className="skeleton w-full aspect-video rounded-none" />
+      <div className="p-4 space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="skeleton w-6 h-6 rounded-full" />
+          <div className="skeleton h-3 w-24" />
+        </div>
+        <div className="skeleton h-3 w-full" />
+        <div className="skeleton h-3 w-2/3" />
+      </div>
+    </div>
+  );
+}
+
 export default function PostList() {
   const [posts, setPosts] = useState<any[]>([]);
   const [status, setStatus] = useState("");
@@ -24,16 +40,16 @@ export default function PostList() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold mb-4">Пости</h1>
+      <h1 className="text-xl font-semibold tracking-tight mb-4">Пости</h1>
 
       {/* Filters - horizontal scroll on mobile */}
       <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap scrollbar-thin">
         {STATUSES.map((s) => (
           <button key={s} onClick={() => { setStatus(s); setPage(1); }}
-            className={`flex items-center gap-1 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
+            className={`press flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium whitespace-nowrap shrink-0 border ${
               status === s
-                ? "bg-neutral-900 text-white"
-                : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
+                ? "brand-gradient text-white border-transparent shadow-brand"
+                : "bg-card text-ink-2 border-line hover:border-line-2 hover:bg-elev"
             }`}>
             <Icon name={STATUS_ICONS[s]} size={14} />
             {STATUS_LABELS[s]}
@@ -42,18 +58,24 @@ export default function PostList() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-neutral-400 text-sm py-16 justify-center">
-          <Icon name="progress_activity" size={20} className="animate-spin" />
+        <div className="space-y-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="animate-fadeIn" style={{ animationDelay: `${i * 40}ms` }}>
+              <PostSkeleton />
+            </div>
+          ))}
         </div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-20">
-          <Icon name="inbox" size={48} className="text-neutral-200 mx-auto" />
-          <p className="text-neutral-400 text-sm mt-3">Постів не знайдено</p>
+        <div className="flex flex-col items-center justify-center py-20 animate-fadeInUp">
+          <span className="flex items-center justify-center w-16 h-16 rounded-2xl bg-elev text-faint">
+            <Icon name="inbox" size={32} />
+          </span>
+          <p className="text-muted text-sm mt-3">Постів не знайдено</p>
         </div>
       ) : (
         <div className="space-y-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
           {posts.map((post, i) => (
-            <div key={post.id} className="animate-fadeInUp" style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}>
+            <div key={post.id} className="animate-fadeInUp" style={{ animationDelay: `${Math.min(i * 45, 300)}ms` }}>
               <PostCard post={post} />
             </div>
           ))}
@@ -61,14 +83,14 @@ export default function PostList() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-6">
+        <div className="flex items-center justify-center gap-2 mt-7">
           <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-            className="flex items-center gap-1 px-3 py-2 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            className="press flex items-center gap-1 pl-2.5 pr-3.5 py-2 rounded-full text-sm bg-card border border-line hover:border-line-2 hover:bg-elev disabled:opacity-40 disabled:hover:bg-card">
             <Icon name="chevron_left" size={16} /> Назад
           </button>
-          <span className="text-xs text-neutral-400 tabular-nums">{page} / {totalPages}</span>
+          <span className="text-xs text-muted tabular-nums px-2">{page} / {totalPages}</span>
           <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-            className="flex items-center gap-1 px-3 py-2 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            className="press flex items-center gap-1 pl-3.5 pr-2.5 py-2 rounded-full text-sm bg-card border border-line hover:border-line-2 hover:bg-elev disabled:opacity-40 disabled:hover:bg-card">
             Далі <Icon name="chevron_right" size={16} />
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import PostList from "./pages/PostList";
 import PostDetail from "./pages/PostDetail";
 import Channels from "./pages/Channels";
@@ -10,10 +10,29 @@ import Login from "./pages/Login";
 import { isLoggedIn, clearToken } from "./auth";
 import Icon from "./components/Icon";
 import TaskBar from "./components/TaskBar";
+import ThemeToggle from "./components/ThemeToggle";
+
+const NAV = [
+  { to: "/", icon: "article", label: "Пости", end: true },
+  { to: "/channels", icon: "rss_feed", label: "Канали" },
+  { to: "/research", icon: "travel_explore", label: "Дослідження" },
+  { to: "/settings", icon: "settings", label: "Налаштування" },
+];
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <span
+      className="brand-gradient inline-flex items-center justify-center rounded-xl shadow-brand shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <Icon name="send" size={size * 0.6} className="text-white -ml-px" filled />
+    </span>
+  );
 }
 
 function NavBar() {
@@ -22,71 +41,82 @@ function NavBar() {
   const handleNavClick = () => setMenuOpen(false);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
-      isActive ? "text-neutral-900 bg-neutral-100" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
+    `press relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+      isActive
+        ? "text-brand bg-brand-soft"
+        : "text-muted hover:text-ink hover:bg-elev"
     }`;
 
   const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-4 py-3.5 text-sm font-medium border-b border-neutral-100 transition-colors ${
-      isActive ? "text-neutral-900 bg-neutral-50" : "text-neutral-500"
+    `flex items-center gap-3 mx-2 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+      isActive ? "text-brand bg-brand-soft" : "text-ink-2 hover:bg-elev"
     }`;
 
   return (
-    <nav className="bg-white border-b border-neutral-200 sticky top-0 z-50">
+    <nav className="glass border-b border-line sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex h-12 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Icon name="hub" size={20} className="text-blue-600" />
-            <span className="font-semibold text-sm tracking-tight">TG Parser</span>
-            <div className="hidden md:flex items-center ml-6 gap-0.5">
-              <NavLink to="/" className={linkClass} end>
-                <Icon name="article" size={18} /> Пости
-              </NavLink>
-              <NavLink to="/channels" className={linkClass}>
-                <Icon name="rss_feed" size={18} /> Канали
-              </NavLink>
-              <NavLink to="/research" className={linkClass}>
-                <Icon name="travel_explore" size={18} /> Дослідження
-              </NavLink>
-              <NavLink to="/settings" className={linkClass}>
-                <Icon name="settings" size={18} /> Налаштування
-              </NavLink>
+        <div className="flex h-14 items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <BrandMark />
+            <span className="font-semibold text-[15px] tracking-tight">TG Parser</span>
+            <div className="hidden md:flex items-center ml-6 gap-1">
+              {NAV.map((item) => (
+                <NavLink key={item.to} to={item.to} className={linkClass} end={item.end}>
+                  <Icon name={item.icon} size={18} /> {item.label}
+                </NavLink>
+              ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
             <button onClick={() => { clearToken(); navigate("/login", { replace: true }); }}
-              className="hidden md:flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-600 transition-colors">
-              <Icon name="logout" size={18} />
+              title="Вийти"
+              aria-label="Вийти"
+              className="press hidden md:flex items-center justify-center w-9 h-9 rounded-full text-muted hover:text-danger hover:bg-danger-soft">
+              <Icon name="logout" size={20} />
             </button>
             <button onClick={() => setMenuOpen((v) => !v)}
-              className="md:hidden p-2 -mr-2 text-neutral-500 hover:text-neutral-900 transition-colors"
+              className="press md:hidden flex items-center justify-center w-9 h-9 -mr-1.5 rounded-full text-muted hover:text-ink hover:bg-elev"
               aria-label="Menu">
-              <Icon name={menuOpen ? "close" : "menu"} size={24} />
+              <Icon key={menuOpen ? "close" : "menu"} name={menuOpen ? "close" : "menu"} size={24} className="animate-popIn" />
             </button>
           </div>
         </div>
       </div>
       {menuOpen && (
-        <div className="md:hidden border-t border-neutral-200 bg-white animate-fadeIn">
-          <NavLink to="/" className={mobileLinkClass} end onClick={handleNavClick}>
-            <Icon name="article" size={20} /> Пости
-          </NavLink>
-          <NavLink to="/channels" className={mobileLinkClass} onClick={handleNavClick}>
-            <Icon name="rss_feed" size={20} /> Канали
-          </NavLink>
-          <NavLink to="/research" className={mobileLinkClass} onClick={handleNavClick}>
-            <Icon name="travel_explore" size={20} /> Дослідження
-          </NavLink>
-          <NavLink to="/settings" className={mobileLinkClass} onClick={handleNavClick}>
-            <Icon name="settings" size={20} /> Налаштування
-          </NavLink>
+        <div className="md:hidden border-t border-line bg-card/95 pb-2 pt-2 space-y-0.5 animate-dropIn origin-top">
+          {NAV.map((item, i) => (
+            <div key={item.to} className="animate-fadeInUp" style={{ animationDelay: `${i * 35}ms` }}>
+              <NavLink to={item.to} className={mobileLinkClass} end={item.end} onClick={handleNavClick}>
+                <Icon name={item.icon} size={20} /> {item.label}
+              </NavLink>
+            </div>
+          ))}
           <button onClick={() => { clearToken(); navigate("/login", { replace: true }); }}
-            className="flex items-center gap-3 w-full px-4 py-3.5 text-sm font-medium text-neutral-400">
+            className="flex items-center gap-3 w-[calc(100%-1rem)] mx-2 px-3 py-3 rounded-xl text-sm font-medium text-danger hover:bg-danger-soft transition-colors animate-fadeInUp"
+            style={{ animationDelay: `${NAV.length * 35}ms` }}>
             <Icon name="logout" size={20} /> Вийти
           </button>
         </div>
       )}
     </nav>
+  );
+}
+
+/** Re-keyed on every navigation so each page plays its entrance animation. */
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <div key={location.pathname} className="animate-routeIn">
+      <Routes location={location}>
+        <Route path="/" element={<PostList />} />
+        <Route path="/posts/:id" element={<PostDetail />} />
+        <Route path="/channels" element={<Channels />} />
+        <Route path="/channels/:id" element={<ChannelDetail />} />
+        <Route path="/research" element={<Research />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </div>
   );
 }
 
@@ -97,18 +127,11 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={
           <AuthGuard>
-            <div className="min-h-screen bg-neutral-50 pb-14">
+            <div className="min-h-screen bg-bg pb-16">
               <NavBar />
               <TaskBar />
-              <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
-                <Routes>
-                  <Route path="/" element={<PostList />} />
-                  <Route path="/posts/:id" element={<PostDetail />} />
-                  <Route path="/channels" element={<Channels />} />
-                  <Route path="/channels/:id" element={<ChannelDetail />} />
-                  <Route path="/research" element={<Research />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Routes>
+              <main className="max-w-7xl mx-auto px-3 sm:px-6 py-5 sm:py-7">
+                <AnimatedRoutes />
               </main>
             </div>
           </AuthGuard>

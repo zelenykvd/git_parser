@@ -1,16 +1,21 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 
-type LlmEndpoint = { label: string; client: OpenAI; model: string };
+type LlmEndpoint = { label: string; provider: string; client: OpenAI; model: string };
+
+/** LLM output together with the endpoint that produced it, e.g. "voidai/gpt-5.1". */
+export type LlmResult = { text: string; model: string };
 
 const endpoints: LlmEndpoint[] = [
   {
     label: config.llm.baseUrl,
+    provider: "voidai",
     client: new OpenAI({ apiKey: config.llm.apiKey, baseURL: config.llm.baseUrl }),
     model: config.llm.model,
   },
   {
     label: config.llm.fallbackBaseUrl,
+    provider: "voidai-beta",
     client: new OpenAI({ apiKey: config.llm.apiKey, baseURL: config.llm.fallbackBaseUrl }),
     model: config.llm.model,
   },
@@ -20,6 +25,7 @@ const endpoints: LlmEndpoint[] = [
 if (config.llm.openRouterApiKey) {
   endpoints.push({
     label: `OpenRouter (${config.llm.openRouterModel})`,
+    provider: "openrouter",
     client: new OpenAI({ apiKey: config.llm.openRouterApiKey, baseURL: config.llm.openRouterBaseUrl }),
     model: config.llm.openRouterModel,
   });
@@ -56,7 +62,12 @@ const TRANSLATE_PROMPT = `Ти — професійний перекладач. 
 - Зберігай структуру абзаців оригіналу
 - Поверни ТІЛЬКИ перекладений текст без пояснень`;
 
-export async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
+/**
+ * Same fallback chain as `llmCall`, but also reports which provider/model won.
+ * The model id is taken from the API response when it echoes one back, so a
+ * provider that silently routes to another model is reported accurately.
+ */
+export async function llmCallWithModel(system: string, user: string, temperature = 0.3): Promise<LlmResult> {
   for (let i = 0; i < endpoints.length; i++) {
     const endpoint = endpoints[i];
     const isLast = i === endpoints.length - 1;
@@ -75,7 +86,7 @@ export async function llmCall(system: string, user: string, temperature = 0.3): 
       if (i > 0) {
         console.log(`[LLM] Served by fallback endpoint: ${endpoint.label}`);
       }
-      return result;
+      return { text: result, model: `${endpoint.provider}/${response.model || endpoint.model}` };
     } catch (err) {
       if (isLast) throw err;
       console.warn(`[LLM] Endpoint failed (${endpoint.label}), trying next...`, (err as Error).message);
@@ -84,11 +95,17 @@ export async function llmCall(system: string, user: string, temperature = 0.3): 
   throw new Error("All LLM endpoints failed");
 }
 
+export async function llmCall(system: string, user: string, temperature = 0.3): Promise<string> {
+  const { text } = await llmCallWithModel(system, user, temperature);
+  return text;
+}
+
 /**
  * Agent 1: Translate HTML text to Ukrainian.
+ * Returns the translation plus the provider/model that produced it.
  */
-export async function translateText(htmlText: string): Promise<string> {
-  return llmCall(TRANSLATE_PROMPT, htmlText);
+export async function translateText(htmlText: string): Promise<LlmResult> {
+  return llmCallWithModel(TRANSLATE_PROMPT, htmlText);
 }
 
 // ——— Agent 2: Verifier ———
@@ -117,9 +134,9 @@ const VERIFY_PROMPT = `Ти — редактор-верифікатор пере
 /**
  * Agent 2: Verify and fix the translation.
  */
-export async function verifyTranslation(original: string, translated: string): Promise<string> {
+export async function verifyTranslation(original: string, translated: string): Promise<LlmResult> {
   const prompt = `ОРИГІНАЛ:\n${original}\n\nПЕРЕКЛАД:\n${translated}`;
-  return llmCall(VERIFY_PROMPT, prompt, 0.1);
+  return llmCallWithModel(VERIFY_PROMPT, prompt, 0.1);
 }
 
 // ——— Agent 3: Caption shortener (Telegram-only, original goes to site) ———

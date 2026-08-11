@@ -71,7 +71,7 @@ export default function ChannelDetail() {
 
   async function handleTranslate(postId: number) {
     setTranslatingId(postId);
-    try { const u = await translatePost(postId); setPosts((p) => p.map((x) => x.id === postId ? { ...x, translatedText: u.translatedText } : x)); }
+    try { const u = await translatePost(postId); setPosts((p) => p.map((x) => x.id === postId ? { ...x, translatedText: u.translatedText, translationModel: u.translationModel } : x)); }
     catch {} finally { setTranslatingId(null); }
   }
 
@@ -95,23 +95,33 @@ export default function ChannelDetail() {
   const fetching = historyProgress && !historyProgress.done;
   const chLabel = channel?.title || (channel?.username ? `@${channel.username}` : "Приватний канал");
 
+  const chipClass = (isActive: boolean) =>
+    `press flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium whitespace-nowrap shrink-0 border ${
+      isActive
+        ? "brand-gradient text-white border-transparent shadow-brand"
+        : "bg-card text-ink-2 border-line hover:border-line-2 hover:bg-elev"
+    }`;
+
   return (
-    <div className="space-y-4 animate-fadeIn">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white border border-neutral-200 p-4">
-        <Link to="/channels" className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-600 transition-colors mb-3">
-          <Icon name="arrow_back" size={14} /> Канали
+      <div className="bg-card border border-line rounded-card shadow-card p-4 sm:p-5">
+        <Link to="/channels" className="group inline-flex items-center gap-1 text-xs text-muted hover:text-ink transition-colors mb-3">
+          <Icon name="arrow_back" size={14} className="transition-transform duration-200 ease-tg group-hover:-translate-x-0.5" /> Канали
         </Link>
         {channel ? (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Avatar id={channel.username || channel.telegramId || String(channel.id)} title={chLabel} size="lg" />
               <div>
-                <h1 className="text-base sm:text-lg font-semibold">{chLabel}</h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-neutral-400">{channel.username ? `@${channel.username}` : channel.telegramId || ""}</span>
-                  <span className={`flex items-center gap-0.5 text-xs ${channel.active ? "text-emerald-600" : "text-neutral-400"}`}>
-                    <Icon name={channel.active ? "radio_button_checked" : "radio_button_unchecked"} size={12} />
+                <h1 className="text-base sm:text-xl font-semibold tracking-tight">{chLabel}</h1>
+                <div className="flex items-center gap-2.5 mt-0.5">
+                  <span className="text-xs text-muted">{channel.username ? `@${channel.username}` : channel.telegramId || ""}</span>
+                  <span className={`flex items-center gap-1 text-xs font-medium ${channel.active ? "text-success" : "text-muted"}`}>
+                    <span className="relative flex w-1.5 h-1.5">
+                      {channel.active && <span className="absolute inline-flex w-full h-full rounded-full bg-success animate-pulseRing" />}
+                      <span className={`relative inline-flex w-1.5 h-1.5 rounded-full ${channel.active ? "bg-success" : "bg-faint"}`} />
+                    </span>
                     {channel.active ? "Актив." : "Неактив."}
                   </span>
                 </div>
@@ -120,56 +130,58 @@ export default function ChannelDetail() {
             <div className="flex items-center gap-2">
               {fetching ? (
                 <>
-                  <span className="text-xs text-neutral-500 flex items-center gap-1">
-                    <Icon name="progress_activity" size={14} className="animate-spin" />
+                  <span className="text-xs text-ink-2 flex items-center gap-1.5 tabular-nums">
+                    <Icon name="progress_activity" size={14} className="animate-spin text-brand" />
                     {historyProgress!.fetched}/{historyProgress!.saved}
                   </span>
                   <button onClick={handleCancelHistory}
-                    className="flex items-center gap-1 px-3 py-2 text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                    className="press flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border border-danger/30 text-danger hover:bg-danger-soft">
                     <Icon name="stop" size={14} /> Стоп
                   </button>
                 </>
               ) : (
                 <button onClick={handleFetchHistory}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-neutral-900 text-white hover:bg-neutral-800 transition-colors">
+                  className="press flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold brand-gradient text-white shadow-brand hover:brightness-105">
                   <Icon name="download" size={14} /> Історія
                 </button>
               )}
             </div>
           </div>
-        ) : <div className="h-10 w-48 bg-shimmer animate-shimmer" />}
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="skeleton w-11 h-11 rounded-full" />
+            <div className="space-y-2">
+              <div className="skeleton h-4 w-40" />
+              <div className="skeleton h-3 w-24" />
+            </div>
+          </div>
+        )}
 
         {historyProgress?.done && !historyProgress.error && (
-          <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 flex items-center gap-1">
+          <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-success-soft text-success text-xs font-medium px-3 py-2 animate-popIn">
             <Icon name="check_circle" size={14} /> {historyProgress.saved} збережено, {historyProgress.skipped} пропущено
           </div>
         )}
         {(historyProgress?.error || fetchError) && (
-          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2 flex items-center gap-1">
-            <Icon name="error" size={14} /> {historyProgress?.error || fetchError}
+          <div className="mt-3 flex items-start gap-1.5 rounded-xl bg-danger-soft text-danger text-xs px-3 py-2 animate-popIn">
+            <Icon name="error" size={14} className="mt-px shrink-0" /> {historyProgress?.error || fetchError}
           </div>
         )}
       </div>
 
       {/* Filters */}
       <div className="flex gap-3 flex-col sm:flex-row sm:items-center">
-        <div className="flex gap-1 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-thin">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-thin">
           {STATUSES.map((s) => (
-            <button key={s} onClick={() => { setStatus(s); setPage(1); }}
-              className={`flex items-center gap-1 px-3 py-2 text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                status === s ? "bg-neutral-900 text-white" : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
-              }`}>
+            <button key={s} onClick={() => { setStatus(s); setPage(1); }} className={chipClass(status === s)}>
               <Icon name={STATUS_ICONS[s]} size={14} /> {STATUS_LABELS[s]}
             </button>
           ))}
         </div>
-        <div className="hidden sm:block h-4 w-px bg-neutral-200" />
-        <div className="flex gap-1 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-thin">
+        <div className="hidden sm:block h-5 w-px bg-line" />
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-thin">
           {PERIODS.map((p) => (
-            <button key={p} onClick={() => { setPeriod(p); setPage(1); }}
-              className={`flex items-center gap-1 px-3 py-2 text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                period === p ? "bg-neutral-700 text-white" : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
-              }`}>
+            <button key={p} onClick={() => { setPeriod(p); setPage(1); }} className={chipClass(period === p)}>
               <Icon name={PERIOD_ICONS[p]} size={14} /> {PERIOD_LABELS[p]}
             </button>
           ))}
@@ -178,22 +190,33 @@ export default function ChannelDetail() {
 
       {/* Posts */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Icon name="progress_activity" size={24} className="animate-spin text-neutral-300" />
+        <div className="space-y-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-card border border-line rounded-card shadow-card overflow-hidden">
+              <div className="skeleton w-full aspect-video rounded-none" />
+              <div className="p-4 space-y-2.5">
+                <div className="skeleton h-3 w-24" />
+                <div className="skeleton h-3 w-full" />
+                <div className="skeleton h-3 w-2/3" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-20">
-          <Icon name="inbox" size={48} className="text-neutral-200 mx-auto" />
-          <p className="text-neutral-400 text-sm mt-3">Постів не знайдено</p>
+        <div className="flex flex-col items-center justify-center py-20 animate-fadeInUp">
+          <span className="flex items-center justify-center w-16 h-16 rounded-2xl bg-elev text-faint">
+            <Icon name="inbox" size={32} />
+          </span>
+          <p className="text-muted text-sm mt-3">Постів не знайдено</p>
         </div>
       ) : (
         <div className="space-y-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
           {posts.map((post, i) => (
-            <div key={post.id} className="animate-fadeInUp" style={{ animationDelay: `${Math.min(i * 30, 200)}ms` }}>
+            <div key={post.id} className="animate-fadeInUp" style={{ animationDelay: `${Math.min(i * 45, 300)}ms` }}>
               <PostCard post={post} />
               {!post.translatedText && (
                 <button onClick={() => handleTranslate(post.id)} disabled={translatingId === post.id}
-                  className="flex items-center gap-1 mt-1 px-3 py-1.5 text-xs text-neutral-400 hover:text-blue-600 disabled:opacity-50 transition-colors">
+                  className="press flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-muted hover:text-brand hover:bg-brand-soft disabled:opacity-60">
                   {translatingId === post.id
                     ? <><Icon name="progress_activity" size={12} className="animate-spin" /> Перекладаю...</>
                     : <><Icon name="translate" size={12} /> Перекласти</>}
@@ -205,14 +228,14 @@ export default function ChannelDetail() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2 pt-2">
           <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-            className="flex items-center gap-1 px-3 py-2 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            className="press flex items-center gap-1 pl-2.5 pr-3.5 py-2 rounded-full text-sm bg-card border border-line hover:border-line-2 hover:bg-elev disabled:opacity-40 disabled:hover:bg-card">
             <Icon name="chevron_left" size={16} /> Назад
           </button>
-          <span className="text-xs text-neutral-400 tabular-nums">{page} / {totalPages}</span>
+          <span className="text-xs text-muted tabular-nums px-2">{page} / {totalPages}</span>
           <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-            className="flex items-center gap-1 px-3 py-2 text-sm border border-neutral-200 disabled:opacity-30 hover:border-neutral-300 transition-colors">
+            className="press flex items-center gap-1 pl-3.5 pr-2.5 py-2 rounded-full text-sm bg-card border border-line hover:border-line-2 hover:bg-elev disabled:opacity-40 disabled:hover:bg-card">
             Далі <Icon name="chevron_right" size={16} />
           </button>
         </div>

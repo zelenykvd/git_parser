@@ -117,8 +117,8 @@ async function processSingleMessage(message: Api.Message, channelDbId: number) {
   const html = entitiesToTelegramHtml(text, entities);
   try {
     const translated = await translateText(html);
-    const verified = await verifyTranslation(html, translated);
-    await updateTranslation(post.id, verified);
+    const verified = await verifyTranslation(html, translated.text);
+    await updateTranslation(post.id, verified.text, translated.model);
     console.log(`Translated post #${post.id}`);
   } catch (err) {
     console.error(`Translation failed for post #${post.id}:`, err);
@@ -155,8 +155,8 @@ async function processGroupedMessages(messages: Api.Message[], channelDbId: numb
   const html = entitiesToTelegramHtml(text, entities);
   try {
     const translated = await translateText(html);
-    const verified = await verifyTranslation(html, translated);
-    await updateTranslation(post.id, verified);
+    const verified = await verifyTranslation(html, translated.text);
+    await updateTranslation(post.id, verified.text, translated.model);
     console.log(`Translated album post #${post.id}`);
   } catch (err) {
     console.error(`Translation failed for album post #${post.id}:`, err);

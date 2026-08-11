@@ -115,10 +115,14 @@ export async function createPost(data: {
   });
 }
 
-export async function updateTranslation(postId: number, translatedText: string) {
+export async function updateTranslation(
+  postId: number,
+  translatedText: string,
+  translationModel?: string
+) {
   return prisma.post.update({
     where: { id: postId },
-    data: { translatedText },
+    data: { translatedText, ...(translationModel ? { translationModel } : {}) },
   });
 }
 
@@ -214,10 +218,14 @@ export async function deletePost(id: number) {
   return prisma.post.delete({ where: { id } });
 }
 
-export async function updatePostTranslatedText(postId: number, text: string) {
+export async function updatePostTranslatedText(
+  postId: number,
+  text: string,
+  translationModel?: string
+) {
   return prisma.post.update({
     where: { id: postId },
-    data: { translatedText: text },
+    data: { translatedText: text, ...(translationModel ? { translationModel } : {}) },
   });
 }
 

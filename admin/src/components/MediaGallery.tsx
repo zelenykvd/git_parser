@@ -72,6 +72,9 @@ export default function MediaGallery({ files, initialIndex = 0, onClose }: Props
   const isVideo = current.type === "video" || current.type === "animation";
   const isPhoto = current.type === "photo";
 
+  const navBtn =
+    "press hidden sm:flex absolute top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-md text-white ring-1 ring-white/15";
+
   return (
     <div
       ref={containerRef}
@@ -79,30 +82,29 @@ export default function MediaGallery({ files, initialIndex = 0, onClose }: Props
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="fixed inset-0 z-[100] bg-black/95 flex flex-col animate-fadeIn"
+      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col animate-fadeIn"
     >
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <span className="text-white/70 text-sm font-medium tabular-nums">
           {total > 1 ? `${index + 1} / ${total}` : ""}
         </span>
-        <button onClick={onClose} className="p-1 text-white/70 hover:text-white transition-colors">
+        <button onClick={onClose}
+          className="press flex items-center justify-center w-9 h-9 rounded-full text-white/70 hover:text-white hover:bg-white/10">
           <Icon name="close" size={24} />
         </button>
       </div>
 
       {/* Content area */}
-      <div className="flex-1 flex items-center justify-center relative min-h-0 px-2 pb-4 sm:px-12">
+      <div className="flex-1 flex items-center justify-center relative min-h-0 px-2 pb-4 sm:px-14">
         {/* Nav arrows — desktop */}
         {total > 1 && index > 0 && (
-          <button onClick={prev}
-            className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <button onClick={prev} className={`${navBtn} left-3`}>
             <Icon name="chevron_left" size={28} />
           </button>
         )}
         {total > 1 && index < total - 1 && (
-          <button onClick={next}
-            className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <button onClick={next} className={`${navBtn} right-3`}>
             <Icon name="chevron_right" size={28} />
           </button>
         )}
@@ -112,7 +114,7 @@ export default function MediaGallery({ files, initialIndex = 0, onClose }: Props
             key={current.id}
             src={url}
             alt={current.fileName || ""}
-            className="max-w-full max-h-full object-contain select-none animate-fadeIn"
+            className="max-w-full max-h-full object-contain select-none rounded-xl shadow-pop animate-zoomIn"
             draggable={false}
           />
         )}
@@ -125,17 +127,17 @@ export default function MediaGallery({ files, initialIndex = 0, onClose }: Props
             controls
             autoPlay
             playsInline
-            className="max-w-full max-h-full animate-fadeIn bg-black"
+            className="max-w-full max-h-full rounded-xl bg-black animate-zoomIn"
             style={{ maxHeight: "calc(100vh - 120px)" }}
           />
         )}
 
         {!isPhoto && !isVideo && (
-          <div className="text-center text-white/60 animate-fadeIn">
+          <div className="text-center text-white/60 animate-zoomIn">
             <Icon name="description" size={48} />
             <p className="mt-2 text-sm">{current.fileName || "file"}</p>
             <a href={url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 mt-3 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm transition-colors">
+              className="press inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-sm ring-1 ring-white/15">
               <Icon name="download" size={16} /> Завантажити
             </a>
           </div>
@@ -144,9 +146,12 @@ export default function MediaGallery({ files, initialIndex = 0, onClose }: Props
 
       {/* Dots — mobile */}
       {total > 1 && total <= 10 && (
-        <div className="flex justify-center gap-1.5 pb-4 shrink-0 sm:hidden">
+        <div className="flex justify-center gap-1.5 pb-5 shrink-0 sm:hidden">
           {files.map((_, i) => (
-            <div key={i} className={`w-1.5 h-1.5 transition-colors ${i === index ? "bg-white" : "bg-white/30"}`} />
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all duration-300 ease-tg ${i === index ? "w-5 bg-white" : "w-1.5 bg-white/30"}`}
+            />
           ))}
         </div>
       )}

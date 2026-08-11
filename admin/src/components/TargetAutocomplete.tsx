@@ -82,7 +82,7 @@ export default function TargetAutocomplete({ channel, dialogs, dialogsLoaded, on
   return (
     <div className="relative">
       <div className="relative">
-        <Icon name="adjust" size={16} className="absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+        <Icon name="adjust" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -93,36 +93,36 @@ export default function TargetAutocomplete({ channel, dialogs, dialogsLoaded, on
           onKeyDown={handleKeyDown}
           placeholder="ID або @username"
           disabled={saving}
-          className={`w-full pl-8 pr-8 py-1.5 text-sm border transition-colors focus:outline-none focus:border-neutral-900 ${
-            saved ? "border-emerald-500 bg-emerald-50/50" : "border-neutral-200"
+          className={`w-full pl-9 pr-9 py-2 rounded-xl border bg-elev text-sm transition-all duration-200 ease-tg focus:outline-none focus:bg-card focus:ring-4 focus:ring-brand/15 ${
+            saved ? "border-success ring-4 ring-success/15" : "border-line focus:border-brand"
           }`}
         />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-          {saving && <Icon name="progress_activity" size={16} className="text-neutral-400 animate-spin" />}
-          {saved && !saving && <Icon name="check" size={16} className="text-emerald-600 animate-checkPop" />}
-          {!saving && !saved && dialogsLoaded && <Icon name="expand_more" size={16} className="text-neutral-400" />}
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+          {saving && <Icon name="progress_activity" size={16} className="text-brand animate-spin" />}
+          {saved && !saving && <Icon name="check" size={16} className="text-success animate-checkPop" />}
+          {!saving && !saved && dialogsLoaded && <Icon name="expand_more" size={16} className="text-faint" />}
         </div>
       </div>
 
       {!dialogsLoaded && !value && (
-        <div className="flex items-center gap-1 mt-1 text-xs text-neutral-400">
+        <div className="flex items-center gap-1 mt-1.5 text-xs text-muted">
           <Icon name="info" size={14} />
           Завантажте підписки для автозаповнення
         </div>
       )}
 
       {open && dialogsLoaded && filtered.length > 0 && (
-        <div ref={listRef} className="absolute z-50 mt-0.5 w-full bg-white border border-neutral-200 shadow-lg max-h-56 overflow-y-auto scrollbar-thin animate-fadeIn">
+        <div ref={listRef} className="absolute z-50 mt-1.5 w-full bg-card border border-line rounded-2xl shadow-pop max-h-56 overflow-y-auto scrollbar-thin p-1 animate-dropIn origin-top">
           {filtered.map((d, i) => (
             <div
               key={d.id}
               onMouseDown={(e) => { e.preventDefault(); selectDialog(d); }}
-              className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${i === highlightIndex ? "bg-neutral-100" : "hover:bg-neutral-50"}`}
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl cursor-pointer transition-colors ${i === highlightIndex ? "bg-brand-soft" : "hover:bg-elev"}`}
             >
               <Avatar id={d.id} title={d.title} size="sm" hasAvatar={d.hasAvatar} />
               <div className="min-w-0 flex-1">
                 <span className="text-sm font-medium truncate block">{d.title}</span>
-                <span className="text-xs text-neutral-400">{d.username ? `@${d.username}` : d.id}</span>
+                <span className="text-xs text-muted">{d.username ? `@${d.username}` : d.id}</span>
               </div>
             </div>
           ))}

@@ -74,8 +74,8 @@ async function processGroup(
     const html = entitiesToTelegramHtml(text, entities);
     try {
       const translated = await translateText(html);
-      const verified = await verifyTranslation(html, translated);
-      await updateTranslation(post.id, verified);
+      const verified = await verifyTranslation(html, translated.text);
+      await updateTranslation(post.id, verified.text, translated.model);
       console.log(`[Poller] Translated post #${post.id} from ${channelLabel}`);
     } catch (err) {
       console.error(`[Poller] Translation failed for post #${post.id}:`, err);

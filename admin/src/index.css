@@ -2,34 +2,321 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — Telegram-flavoured palette.
+ * Values are "R G B" channels so Tailwind can apply opacity modifiers
+ * (see tailwind.config.js). Light is the default; dark is applied either by
+ * the OS preference (when the user has not picked a theme) or by an explicit
+ * data-theme attribute on <html> (see src/theme.ts).
+ */
 @layer base {
-  body {
-    @apply font-sans text-neutral-900 antialiased;
+  :root {
+    /* surfaces */
+    --c-bg: 242 245 249;
+    --c-bg-2: 228 236 245;
+    --c-card: 255 255 255;
+    --c-elev: 246 248 251;
+    --c-line: 226 232 240;
+    --c-line-2: 203 213 225;
+
+    /* text */
+    --c-ink: 17 27 39;
+    --c-ink-2: 71 85 105;
+    --c-muted: 118 133 150;
+    --c-faint: 160 174 189;
+
+    /* Telegram blue */
+    --c-brand: 51 144 236; /* #3390EC */
+    --c-brand-2: 42 171 238; /* #2AABEE — logo gradient start */
+    --c-brand-3: 34 158 217; /* #229ED9 — logo gradient end */
+    --c-brand-ink: 255 255 255;
+    --c-brand-soft: 225 240 254;
+
+    /* states */
+    --c-success: 22 163 74;
+    --c-success-soft: 220 252 231;
+    --c-danger: 220 38 38;
+    --c-danger-soft: 254 226 226;
+    --c-warn: 202 111 6;
+    --c-warn-soft: 254 243 199;
+    --c-info: 2 132 199;
+    --c-info-soft: 224 242 254;
+    --c-violet: 124 58 237;
+    --c-violet-soft: 237 233 254;
+
+    --c-shadow: 15 23 42;
+
+    color-scheme: light;
   }
+
+  /* OS preference — only while the user has not chosen a theme manually. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --c-bg: 14 22 33; /* #0E1621 — Telegram dark chat */
+      --c-bg-2: 9 16 25;
+      --c-card: 23 33 43; /* #17212B — Telegram dark panel */
+      --c-elev: 32 43 54; /* #202B36 */
+      --c-line: 39 52 66;
+      --c-line-2: 55 71 88;
+
+      --c-ink: 233 240 247;
+      --c-ink-2: 190 203 216;
+      --c-muted: 125 139 153; /* #7D8B99 */
+      --c-faint: 94 108 122;
+
+      --c-brand: 100 181 239; /* #64B5EF — Telegram dark accent */
+      --c-brand-2: 42 171 238;
+      --c-brand-3: 34 158 217;
+      --c-brand-ink: 8 16 26;
+      --c-brand-soft: 27 51 73;
+
+      --c-success: 76 201 122;
+      --c-success-soft: 22 56 39;
+      --c-danger: 245 108 108;
+      --c-danger-soft: 66 28 30;
+      --c-warn: 240 180 41;
+      --c-warn-soft: 64 48 15;
+      --c-info: 56 189 248;
+      --c-info-soft: 13 47 67;
+      --c-violet: 173 149 250;
+      --c-violet-soft: 47 37 76;
+
+      --c-shadow: 0 0 0;
+
+      color-scheme: dark;
+    }
+  }
+
+  /* Manual override — wins over the OS preference. */
+  :root[data-theme="dark"] {
+    --c-bg: 14 22 33;
+    --c-bg-2: 9 16 25;
+    --c-card: 23 33 43;
+    --c-elev: 32 43 54;
+    --c-line: 39 52 66;
+    --c-line-2: 55 71 88;
+
+    --c-ink: 233 240 247;
+    --c-ink-2: 190 203 216;
+    --c-muted: 125 139 153;
+    --c-faint: 94 108 122;
+
+    --c-brand: 100 181 239;
+    --c-brand-2: 42 171 238;
+    --c-brand-3: 34 158 217;
+    --c-brand-ink: 8 16 26;
+    --c-brand-soft: 27 51 73;
+
+    --c-success: 76 201 122;
+    --c-success-soft: 22 56 39;
+    --c-danger: 245 108 108;
+    --c-danger-soft: 66 28 30;
+    --c-warn: 240 180 41;
+    --c-warn-soft: 64 48 15;
+    --c-info: 56 189 248;
+    --c-info-soft: 13 47 67;
+    --c-violet: 173 149 250;
+    --c-violet-soft: 47 37 76;
+
+    --c-shadow: 0 0 0;
+
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply font-sans text-ink bg-bg antialiased;
+    transition: background-color 240ms ease, color 240ms ease;
+  }
+
+  ::selection {
+    background: rgb(var(--c-brand) / 0.28);
+  }
+
+  /* One consistent focus ring everywhere, keyboard-only. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-brand));
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply bg-card text-ink;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-faint;
+  }
+
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    user-select: none;
   }
   .material-symbols-outlined.filled {
     font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
 }
 
+@layer components {
+  /* Frosted bar/card, as in Telegram's headers and overlays. */
+  .glass {
+    background: rgb(var(--c-card) / 0.78);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+  }
+
+  /* Standard surface: the base for every panel and card. */
+  .surface {
+    @apply bg-card border border-line rounded-card shadow-card;
+  }
+
+  /* Press feedback for anything clickable. */
+  .press {
+    transition: transform 140ms cubic-bezier(0.25, 0.8, 0.25, 1),
+      background-color 140ms ease, color 140ms ease, border-color 140ms ease,
+      box-shadow 200ms cubic-bezier(0.25, 0.8, 0.25, 1), opacity 140ms ease;
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  /* Material-style ripple, spawned by src/ripple.ts. */
+  .ripple-host {
+    position: relative;
+    overflow: hidden;
+  }
+  .ripple-ink {
+    position: absolute;
+    border-radius: 9999px;
+    transform: scale(0);
+    pointer-events: none;
+    background: rgb(var(--c-brand) / 0.28);
+    animation: ripple-out 600ms cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+  }
+
+  .skeleton {
+    @apply rounded-lg;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--c-elev)) 25%,
+      rgb(var(--c-line)) 50%,
+      rgb(var(--c-elev)) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s infinite linear;
+  }
+
+  /* Indeterminate progress stripes (history fetch, publishing). */
+  .barber {
+    background-image: linear-gradient(
+      115deg,
+      rgb(var(--c-brand)) 25%,
+      rgb(var(--c-brand-2)) 25%,
+      rgb(var(--c-brand-2)) 50%,
+      rgb(var(--c-brand)) 50%,
+      rgb(var(--c-brand)) 75%,
+      rgb(var(--c-brand-2)) 75%
+    );
+    background-size: 28px 100%;
+    animation: barber-slide 700ms linear infinite;
+  }
+
+  /* Faint dotted texture — echoes a Telegram chat wallpaper. */
+  .tg-canvas {
+    background-image: radial-gradient(
+      rgb(var(--c-line-2) / 0.55) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #d4d4d4 transparent;
+    scrollbar-color: rgb(var(--c-line-2)) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+    height: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #d4d4d4;
+    background-color: rgb(var(--c-line-2));
+    border-radius: 9999px;
   }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--c-muted));
+  }
+
   .bg-shimmer {
-    background: linear-gradient(90deg, #f5f5f5 25%, #e5e5e5 50%, #f5f5f5 75%);
+    background: linear-gradient(
+      90deg,
+      rgb(var(--c-elev)) 25%,
+      rgb(var(--c-line)) 50%,
+      rgb(var(--c-elev)) 75%
+    );
     background-size: 200% 100%;
+  }
+
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--c-brand-2)),
+      rgb(var(--c-brand-3))
+    );
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Keyframes used by the component classes above (kept outside @layer so they
+   are always emitted, independent of which Tailwind utilities are in use). */
+@keyframes ripple-out {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes barber-slide {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 28px 0;
+  }
+}
+
+/* Motion is decoration — never a requirement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .press:active:not(:disabled) {
+    transform: none;
   }
 }

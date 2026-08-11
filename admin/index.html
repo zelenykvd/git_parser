@@ -2,15 +2,23 @@
 <html lang="uk">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TG Parser</title>
+    <meta name="theme-color" content="#3390EC" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <!-- Material Symbols icon font is now self-hosted (see admin/src/main.tsx) -->
-
+    <script>
+      // Apply the stored theme before first paint so a manually chosen dark
+      // mode never flashes light (see admin/src/theme.ts).
+      try {
+        var t = localStorage.getItem("admin_theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
   </head>
-  <body class="bg-neutral-50">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
