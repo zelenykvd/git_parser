@@ -51,8 +51,18 @@ export const config = {
   llm: {
     apiKey: required("LLM_API_KEY"),
     baseUrl: process.env.LLM_BASE_URL || "https://api.voidai.app/v1",
-    fallbackBaseUrl: process.env.LLM_FALLBACK_BASE_URL || "https://beta.voidai.app/v1",
+    // Optional second VoidAI host. Empty by default — beta.voidai.app no longer
+    // resolves, and a fallback equal to baseUrl is skipped as a duplicate.
+    fallbackBaseUrl: process.env.LLM_FALLBACK_BASE_URL || "",
     model: process.env.LLM_MODEL || "gpt-5.1",
+    // Model resilience. LLM_MODEL is only a *preference*: when it turns out to
+    // be dead, the translator probes known-good VoidAI models and uses the first
+    // healthy one instead of failing over to OpenRouter for every post.
+    autoSelectWorking: (process.env.LLM_AUTO_SELECT_WORKING || "true").toLowerCase() !== "false",
+    // Comma-separated override for the candidate list (ordered, best first).
+    workingModelsCsv: process.env.LLM_WORKING_MODELS_CSV || "",
+    // How long a discovered working-model list stays valid before re-probing.
+    modelHealthTtlMs: Number(process.env.LLM_MODEL_HEALTH_TTL_MS || 6 * 60 * 60 * 1000),
     openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free",

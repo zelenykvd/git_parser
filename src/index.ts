@@ -5,6 +5,7 @@ import { startPoller } from "./parser/poller.js";
 import { prisma, releaseStalePublishing } from "./db/repository.js";
 import { syncPublishedToVaibeCod } from "./bot/vaibecod.js";
 import { repairMissingMedia } from "./media/repair.js";
+import { warmUpLlmModels } from "./translator/llm.js";
 
 export async function main() {
   console.log("Starting Telegram Parser & Translator...\n");
@@ -56,6 +57,13 @@ export async function main() {
 
   // Start Express API server
   await startServer();
+
+  // Find a VoidAI model that actually answers, so a dead LLM_MODEL does not
+  // push every translation onto the OpenRouter fallback. Non-blocking: until it
+  // finishes, translations rotate through the built-in candidate list.
+  warmUpLlmModels().catch((err) =>
+    console.error("[LLM] Model warm-up failed:", (err as Error).message)
+  );
 
   // Start Telegram listener + poller
   if (config.telegram.apiId && config.telegram.apiHash) {
