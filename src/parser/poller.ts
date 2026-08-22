@@ -20,6 +20,8 @@ let isPolling = false;
 let pollStartedAt = 0;
 /** Guards against warming the entity cache once per failing channel per cycle. */
 let lastEntityWarmUpAt = 0;
+/** channel db id -> timestamp until which we stop retrying an unresolvable peer. */
+const unresolvableUntil = new Map<number, number>();
 
 /** Deadline for a single Telegram round trip (entity lookup, message fetch). */
 const TELEGRAM_CALL_TIMEOUT_MS = 120_000;
@@ -33,6 +35,12 @@ const ENTITY_WARMUP_COOLDOWN_MS = 10 * 60 * 1000;
  * per-call deadlines are the real fix, this only catches what they miss.
  */
 const STUCK_POLL_LIMIT_MS = 2 * 60 * 60 * 1000;
+/**
+ * How long to leave a channel alone after its peer could not be resolved even
+ * with a warm entity cache. That means the account is no longer a member — no
+ * amount of retrying fixes it, and retrying every minute buried the real log.
+ */
+const UNRESOLVABLE_BACKOFF_MS = 30 * 60 * 1000;
 
 type ChannelRow = { id: number; username: string | null; telegramId: string | null };
 
@@ -78,8 +86,16 @@ async function resolveChannelEntity(channel: ChannelRow): Promise<Api.Channel | 
       );
       await warmUpEntityCache(client);
     }
-    return fetchEntity(`getEntity(${channelLabel(channel)}) retry`);
+    return fetchEntity(`getEntity(${channelLabel(channel)}) retry`).catch((retryErr) => {
+      if (!isUnknownEntityError(retryErr)) throw retryErr;
+      unresolvableUntil.set(channel.id, Date.now() + UNRESOLVABLE_BACKOFF_MS);
+      throw new Error(
+        `${channelLabel(channel)} could not be resolved even with a warm entity cache — the account is probably not a member of it any more. Rejoin the channel or deactivate it in the admin panel. Retrying in ${Math.round(UNRESOLVABLE_BACKOFF_MS / 60000)} min.`
+      );
+    });
   });
+
+  unresolvableUntil.delete(channel.id);
 
   if (!(entity instanceof Api.Channel)) {
     console.error(`${channelLabel(channel)} is not a channel, skipping`);
@@ -194,6 +210,9 @@ async function pollAllChannels() {
   if (channels.length === 0) return;
 
   for (const channel of channels) {
+    const backoff = unresolvableUntil.get(channel.id) ?? 0;
+    if (Date.now() < backoff) continue;
+
     try {
       const work =
         channel.lastCheckedMsgId === null
