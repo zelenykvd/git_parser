@@ -1,6 +1,6 @@
 import { Api } from "telegram";
 import bigInt from "big-integer";
-import { getTelegramClient } from "./client.js";
+import { getTelegramClient, warmUpEntityCache } from "./client.js";
 import { parseGramJSEntities, entitiesToTelegramHtml } from "./formatter.js";
 import {
   getActiveChannels,
@@ -12,14 +12,42 @@ import {
 import { downloadMessageMedia } from "../media/downloader.js";
 import { translateText, verifyTranslation } from "../translator/llm.js";
 import { config } from "../config.js";
+import { withTimeout, isTimeoutError } from "../lib/timeout.js";
 import { groupMessages, MessageGroup } from "./grouper.js";
 
 let isPolling = false;
+/** When the in-flight poll started — the watchdog needs it to spot a hang. */
+let pollStartedAt = 0;
+/** Guards against warming the entity cache once per failing channel per cycle. */
+let lastEntityWarmUpAt = 0;
+
+/** Deadline for a single Telegram round trip (entity lookup, message fetch). */
+const TELEGRAM_CALL_TIMEOUT_MS = 120_000;
+/** Deadline for one channel's whole poll, media downloads and translation included. */
+const CHANNEL_POLL_TIMEOUT_MS = 15 * 60 * 1000;
+/** Re-warming the entity cache more often than this is pointless churn. */
+const ENTITY_WARMUP_COOLDOWN_MS = 10 * 60 * 1000;
+/**
+ * Backstop for the "previous poll still running" flag. Deliberately far above
+ * any legitimate cycle (a 30-day initial sync downloads a lot of media) — the
+ * per-call deadlines are the real fix, this only catches what they miss.
+ */
+const STUCK_POLL_LIMIT_MS = 2 * 60 * 60 * 1000;
 
 type ChannelRow = { id: number; username: string | null; telegramId: string | null };
 
 function channelLabel(channel: ChannelRow): string {
   return channel.username ? `@${channel.username}` : `id:${channel.telegramId}`;
+}
+
+/** Telegram cannot resolve a peer we have never seen — the entity cache is cold. */
+function isUnknownEntityError(err: unknown): boolean {
+  const message = (err as Error)?.message || "";
+  return (
+    message.includes("Could not find the input entity") ||
+    message.includes("CHANNEL_INVALID") ||
+    message.includes("PEER_ID_INVALID")
+  );
 }
 
 async function resolveChannelEntity(channel: ChannelRow): Promise<Api.Channel | null> {
@@ -34,7 +62,25 @@ async function resolveChannelEntity(channel: ChannelRow): Promise<Api.Channel | 
     console.error(`Channel #${channel.id} has no username or telegramId, skipping`);
     return null;
   }
-  const entity = await client.getEntity(identifier);
+
+  const fetchEntity = (label: string) =>
+    withTimeout(client.getEntity(identifier), TELEGRAM_CALL_TIMEOUT_MS, label);
+
+  const entity = await fetchEntity(`getEntity(${channelLabel(channel)})`).catch(async (err) => {
+    // Channels stored by numeric id have no cached access_hash after a restart,
+    // which is what CHANNEL_INVALID means here. Pulling the dialog list teaches
+    // the client about them; retry once.
+    if (!isUnknownEntityError(err)) throw err;
+    if (Date.now() - lastEntityWarmUpAt > ENTITY_WARMUP_COOLDOWN_MS) {
+      lastEntityWarmUpAt = Date.now();
+      console.warn(
+        `[Poller] ${channelLabel(channel)} is not in the entity cache — warming it up and retrying`
+      );
+      await warmUpEntityCache(client);
+    }
+    return fetchEntity(`getEntity(${channelLabel(channel)}) retry`);
+  });
+
   if (!(entity instanceof Api.Channel)) {
     console.error(`${channelLabel(channel)} is not a channel, skipping`);
     return null;
@@ -100,12 +146,31 @@ export function startPoller() {
 
   runPoll();
 
-  function scheduleNext() {
-    setTimeout(() => {
-      runPoll().finally(scheduleNext);
-    }, config.poller.intervalMs);
+  // A self-chaining setTimeout (`runPoll().finally(scheduleNext)`) used to drive
+  // this loop. When a Telegram call hung — which is what a dropped network does
+  // to GramJS — `runPoll` never settled, the next timer was never armed, and the
+  // poller stayed dead until a redeploy. A fixed interval keeps firing no matter
+  // what the previous tick is doing; `runPoll` itself skips overlapping runs.
+  setInterval(() => {
+    releaseStuckPoll();
+    runPoll();
+  }, config.poller.intervalMs);
+}
+
+/**
+ * Belt-and-braces for the skip guard: if a poll is somehow still "running" long
+ * after any real poll could have finished, its promise is never coming back.
+ * Drop the flag so the next tick can start a fresh cycle.
+ */
+function releaseStuckPoll() {
+  if (!isPolling) return;
+  const stuckFor = Date.now() - pollStartedAt;
+  if (stuckFor > STUCK_POLL_LIMIT_MS) {
+    console.error(
+      `[Poller] Watchdog: poll has been running for ${Math.round(stuckFor / 1000)}s — abandoning it and starting a new cycle`
+    );
+    isPolling = false;
   }
-  scheduleNext();
 }
 
 async function runPoll() {
@@ -114,6 +179,7 @@ async function runPoll() {
     return;
   }
   isPolling = true;
+  pollStartedAt = Date.now();
   try {
     await pollAllChannels();
   } catch (err) {
@@ -129,15 +195,45 @@ async function pollAllChannels() {
 
   for (const channel of channels) {
     try {
-      if (channel.lastCheckedMsgId === null) {
-        await initialSync(channel);
-      } else {
-        await incrementalPoll(channel as typeof channel & { lastCheckedMsgId: number });
-      }
+      const work =
+        channel.lastCheckedMsgId === null
+          ? initialSync(channel)
+          : incrementalPoll(channel as typeof channel & { lastCheckedMsgId: number });
+      // One unresponsive channel must not stall every channel behind it.
+      await withTimeout(work, CHANNEL_POLL_TIMEOUT_MS, `poll ${channelLabel(channel)}`);
     } catch (err) {
-      console.error(`Poll error for ${channelLabel(channel)}:`, err);
+      if (isTimeoutError(err)) {
+        console.error(`[Poller] ${channelLabel(channel)} timed out — moving on:`, (err as Error).message);
+      } else {
+        console.error(`Poll error for ${channelLabel(channel)}:`, err);
+      }
     }
   }
+}
+
+/** Drain an async message iterator under a single deadline. */
+async function collectMessages(
+  client: import("telegram").TelegramClient,
+  entity: Api.Channel,
+  params: Parameters<import("telegram").TelegramClient["iterMessages"]>[1],
+  label: string,
+  stopBefore?: Date
+): Promise<{ messages: Api.Message[]; maxMsgId: number }> {
+  const collect = async () => {
+    const messages: Api.Message[] = [];
+    let maxMsgId = 0;
+    for await (const message of client.iterMessages(entity, params)) {
+      if (stopBefore && message.date) {
+        const msgDate = new Date(message.date * 1000);
+        if (msgDate < stopBefore) break;
+      }
+      if (message.id > maxMsgId) maxMsgId = message.id;
+      messages.push(message as Api.Message);
+    }
+    return { messages, maxMsgId };
+  };
+
+  return withTimeout(collect(), TELEGRAM_CALL_TIMEOUT_MS, label);
 }
 
 async function initialSync(channel: ChannelRow) {
@@ -151,17 +247,15 @@ async function initialSync(channel: ChannelRow) {
   since.setDate(since.getDate() - config.poller.initialSyncDays);
 
   // Collect all messages in the sync window first, then group them
-  const allMessages: Api.Message[] = [];
-  let maxMsgId = 0;
-
-  for await (const message of client.iterMessages(entity, { limit: undefined })) {
-    if (message.date) {
-      const msgDate = new Date(message.date * 1000);
-      if (msgDate < since) break;
-    }
-    if (message.id > maxMsgId) maxMsgId = message.id;
-    allMessages.push(message as Api.Message);
-  }
+  const collected = await collectMessages(
+    client,
+    entity,
+    { limit: undefined },
+    `iterMessages(${channelLabel(channel)} initial)`,
+    since
+  );
+  const allMessages = collected.messages;
+  let maxMsgId = collected.maxMsgId;
 
   // Reverse to oldest-first for correct grouping
   allMessages.reverse();
@@ -186,9 +280,13 @@ async function initialSync(channel: ChannelRow) {
     if (dbMax) {
       maxMsgId = dbMax;
     } else {
-      for await (const msg of client.iterMessages(entity, { limit: 1 })) {
-        maxMsgId = msg.id;
-      }
+      const latest = await collectMessages(
+        client,
+        entity,
+        { limit: 1 },
+        `iterMessages(${channelLabel(channel)} latest)`
+      );
+      maxMsgId = latest.maxMsgId;
     }
   }
 
@@ -201,10 +299,12 @@ async function incrementalPoll(channel: ChannelRow & { lastCheckedMsgId: number 
   const entity = await resolveChannelEntity(channel);
   if (!entity) return;
 
-  const messages: Api.Message[] = [];
-  for await (const msg of client.iterMessages(entity, { minId: channel.lastCheckedMsgId })) {
-    messages.push(msg as Api.Message);
-  }
+  const { messages } = await collectMessages(
+    client,
+    entity,
+    { minId: channel.lastCheckedMsgId },
+    `iterMessages(${channelLabel(channel)} incremental)`
+  );
 
   if (messages.length === 0) return;
 

@@ -2,10 +2,12 @@ import { config } from "./config.js";
 import { startServer } from "./server/app.js";
 import { startListener } from "./parser/listener.js";
 import { startPoller } from "./parser/poller.js";
+import { startConnectionWatchdog } from "./parser/client.js";
 import { prisma, releaseStalePublishing } from "./db/repository.js";
 import { syncPublishedToVaibeCod } from "./bot/vaibecod.js";
 import { repairMissingMedia } from "./media/repair.js";
 import { warmUpLlmModels } from "./translator/llm.js";
+import { startTranslationBackfill } from "./translator/backfill.js";
 
 export async function main() {
   console.log("Starting Telegram Parser & Translator...\n");
@@ -69,6 +71,9 @@ export async function main() {
   if (config.telegram.apiId && config.telegram.apiHash) {
     await startListener();
     startPoller();
+    // Keeps the user client alive between polls — without it a dropped socket
+    // silently kills the NewMessage listener.
+    startConnectionWatchdog();
   } else {
     console.log(
       "Telegram credentials not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env"
@@ -82,6 +87,9 @@ export async function main() {
       console.error("[MediaRepair] Failed:", err.message)
     );
   }
+
+  // Translate PENDING posts left untranslated by history fetches / initial sync
+  startTranslationBackfill();
 
   // Auto-sync published posts to VaibeCod
   if (config.vaibeCod.apiKey) {

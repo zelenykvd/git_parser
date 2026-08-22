@@ -1,6 +1,6 @@
 import { NewMessage, NewMessageEvent } from "telegram/events/index.js";
 import { Api } from "telegram";
-import { getTelegramClient } from "./client.js";
+import { getTelegramClient, addPersistentEventHandler } from "./client.js";
 import { parseGramJSEntities, entitiesToTelegramHtml } from "./formatter.js";
 import { getActiveChannels, createPost } from "../db/repository.js";
 import { downloadMessageMedia } from "../media/downloader.js";
@@ -12,7 +12,8 @@ const groupBuffer = new Map<string, { messages: Api.Message[]; timer: ReturnType
 const GROUP_WAIT_MS = 1500; // wait 1.5s for more messages in the same album
 
 export async function startListener() {
-  const client = await getTelegramClient();
+  // Make sure a client exists so the handler below attaches right away.
+  await getTelegramClient();
   const channels = await getActiveChannels();
 
   if (channels.length === 0) {
@@ -22,7 +23,10 @@ export async function startListener() {
   const channelLabels = channels.map((c) => c.username || `id:${c.telegramId}`);
   console.log(`Monitoring ${channelLabels.length} channels:`, channelLabels);
 
-  client.addEventHandler(async (event: NewMessageEvent) => {
+  // Registered through the client module, not on this instance: a reconnect
+  // builds a fresh TelegramClient and a handler bound to the old one would
+  // silently stop firing.
+  addPersistentEventHandler(async (event: NewMessageEvent) => {
     try {
       await handleNewMessage(event);
     } catch (err) {

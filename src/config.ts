@@ -87,6 +87,14 @@ export const config = {
     intervalMs: Number(process.env.POLLER_INTERVAL_MS || "60000"),
     initialSyncDays: Number(process.env.POLLER_INITIAL_SYNC_DAYS || "30"),
   },
+  // Drains the backlog of PENDING posts saved without a translation (history
+  // fetches, initial sync). Deliberately slow so it never starves live posts.
+  backfill: {
+    enabled: (process.env.TRANSLATION_BACKFILL_ENABLED || "true").toLowerCase() !== "false",
+    intervalMs: Number(process.env.TRANSLATION_BACKFILL_INTERVAL_MS || 5 * 60 * 1000),
+    batchSize: Number(process.env.TRANSLATION_BACKFILL_BATCH || "5"),
+    delayMs: Number(process.env.TRANSLATION_BACKFILL_DELAY_MS || "3000"),
+  },
   vaibeCod: {
     apiUrl: process.env.VAIBECOD_API_URL || "https://www.vaibecod.com/api/v1",
     apiKey: process.env.VAIBECOD_API_KEY || "",

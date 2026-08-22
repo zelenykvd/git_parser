@@ -214,6 +214,23 @@ export async function getPosts(params: {
   return { posts, total, page, totalPages: Math.ceil(total / limit) };
 }
 
+/**
+ * PENDING posts that were saved without a translation — history fetches and the
+ * poller's initial sync store raw text on purpose, so without a backfill they
+ * would sit in the admin panel forever and never reach the target channel.
+ */
+export async function getPostsMissingTranslation(limit = 10) {
+  return prisma.post.findMany({
+    where: { status: Status.PENDING, translatedText: null },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function countPostsMissingTranslation(): Promise<number> {
+  return prisma.post.count({ where: { status: Status.PENDING, translatedText: null } });
+}
+
 export async function deletePost(id: number) {
   return prisma.post.delete({ where: { id } });
 }

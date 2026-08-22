@@ -11,6 +11,19 @@ type LlmEndpoint = {
   /** VoidAI hosts serve many models with one key, so a dead model is worth
    * rotating past. OpenRouter is pinned to its configured slug. */
   rotateModels: boolean;
+  /**
+   * Whether an auth rejection may park this endpoint. Only fallbacks qualify:
+   * the primary is the one endpoint that must always be attempted, so a stray
+   * 403 there must never take translation offline.
+   */
+  canDisable?: boolean;
+  /**
+   * Set when a disable-able endpoint rejected our key. Retrying it on the next
+   * post only adds latency to every translation — the OpenRouter key had been
+   * answering `401 User not found` on every single post. Cleared after
+   * `ENDPOINT_AUTH_COOLDOWN_MS` so a fixed key returns without a redeploy.
+   */
+  disabledUntil?: number;
 };
 
 /** LLM output together with the endpoint that produced it, e.g. "voidai/gpt-5.1". */
@@ -38,6 +51,7 @@ if (config.llm.fallbackBaseUrl && config.llm.fallbackBaseUrl !== config.llm.base
     client: new OpenAI({ apiKey: config.llm.apiKey, baseURL: config.llm.fallbackBaseUrl }),
     model: config.llm.model,
     rotateModels: true,
+    canDisable: true,
   });
 }
 
@@ -49,6 +63,7 @@ if (config.llm.openRouterApiKey) {
     client: new OpenAI({ apiKey: config.llm.openRouterApiKey, baseURL: config.llm.openRouterBaseUrl }),
     model: config.llm.openRouterModel,
     rotateModels: false,
+    canDisable: true,
   });
 }
 
@@ -178,6 +193,21 @@ function isAccountFault(err: unknown): boolean {
     message.includes("payment required")
   );
 }
+
+/** A key that is rejected outright — as opposed to out of credit or throttled. */
+function isAuthFault(err: unknown): boolean {
+  const status = (err as { status?: number }).status;
+  if (status === 401 || status === 403) return true;
+  const message = ((err as Error).message || "").toLowerCase();
+  return (
+    message.includes("user not found") ||
+    message.includes("invalid api key") ||
+    message.includes("no auth credentials")
+  );
+}
+
+/** How long a provider stays parked after rejecting our key. */
+const ENDPOINT_AUTH_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 type ProbeVerdict = "ok" | "down" | "account";
 
@@ -377,6 +407,10 @@ export async function llmCallWithModel(system: string, user: string, temperature
 
   for (let i = 0; i < endpoints.length; i++) {
     const endpoint = endpoints[i];
+    if (endpoint.disabledUntil && Date.now() < endpoint.disabledUntil) {
+      failures.push(`${endpoint.provider}: skipped (key rejected earlier)`);
+      continue;
+    }
     const models = await modelsForEndpoint(endpoint);
     let modelFailed = false;
 
@@ -403,9 +437,19 @@ export async function llmCallWithModel(system: string, user: string, temperature
         const message = (err as Error).message;
         failures.push(`${endpoint.provider}/${model} (${endpoint.label}): ${message}`);
 
+        if (isAuthFault(err) && endpoint.canDisable) {
+          // The key itself is rejected. Park the provider instead of paying for
+          // a guaranteed failure on every future post.
+          endpoint.disabledUntil = Date.now() + ENDPOINT_AUTH_COOLDOWN_MS;
+          console.error(
+            `[LLM] ${endpoint.provider} rejected our API key (${message}) — parking this fallback for ${Math.round(ENDPOINT_AUTH_COOLDOWN_MS / 3_600_000)}h. Fix the key in the environment to bring it back.`
+          );
+          break;
+        }
+
         if (isAccountFault(err)) {
-          // Key, credits or rate limit — another model on the same host cannot
-          // fix that, so drop straight to the next provider.
+          // Credits or rate limit — another model on the same host cannot fix
+          // that, so drop straight to the next provider.
           console.warn(
             `[LLM] ${endpoint.provider} refused for account reasons (not a dead model), skipping to the next provider:`,
             message

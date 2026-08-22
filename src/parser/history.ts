@@ -5,6 +5,7 @@ import { parseGramJSEntities } from "./formatter.js";
 import { createPost } from "../db/repository.js";
 import { downloadMessageMedia } from "../media/downloader.js";
 import { groupMessages } from "./grouper.js";
+import { triggerTranslationBackfill } from "../translator/backfill.js";
 
 export interface FetchProgress {
   fetched: number;
@@ -113,5 +114,11 @@ export async function fetchChannelHistory(
 
   progress.done = true;
   report();
+
+  // Posts land here untranslated on purpose — translating inline would stall a
+  // multi-thousand-message fetch. Hand the backlog to the backfill worker so
+  // they do not sit in the admin panel unapprovable forever.
+  if (progress.saved > 0) triggerTranslationBackfill();
+
   return progress;
 }
