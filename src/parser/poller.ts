@@ -20,6 +20,8 @@ let isPolling = false;
 let pollStartedAt = 0;
 /** Guards against warming the entity cache once per failing channel per cycle. */
 let lastEntityWarmUpAt = 0;
+let cyclesSinceHeartbeat = 0;
+let lastHeartbeatAt = Date.now();
 /** channel db id -> timestamp until which we stop retrying an unresolvable peer. */
 const unresolvableUntil = new Map<number, number>();
 
@@ -41,6 +43,12 @@ const STUCK_POLL_LIMIT_MS = 2 * 60 * 60 * 1000;
  * amount of retrying fixes it, and retrying every minute buried the real log.
  */
 const UNRESOLVABLE_BACKOFF_MS = 30 * 60 * 1000;
+/**
+ * A quiet poller and a dead poller looked identical in the log — a cycle only
+ * printed when a channel had new messages, which is exactly why the outage went
+ * unnoticed for 16 hours. This proves liveness without a line every minute.
+ */
+const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000;
 
 type ChannelRow = { id: number; username: string | null; telegramId: string | null };
 
@@ -202,7 +210,19 @@ async function runPoll() {
     console.error("Poll error:", err);
   } finally {
     isPolling = false;
+    heartbeat();
   }
+}
+
+function heartbeat() {
+  cyclesSinceHeartbeat++;
+  const elapsed = Date.now() - lastHeartbeatAt;
+  if (elapsed < HEARTBEAT_INTERVAL_MS) return;
+  console.log(
+    `[Poller] Heartbeat: ${cyclesSinceHeartbeat} cycle(s) in the last ${Math.round(elapsed / 60000)} min`
+  );
+  cyclesSinceHeartbeat = 0;
+  lastHeartbeatAt = Date.now();
 }
 
 async function pollAllChannels() {
